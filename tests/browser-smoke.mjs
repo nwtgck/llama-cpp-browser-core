@@ -1,0 +1,82 @@
+/** CI-only browser execution of the real compiled CPU profiles. */
+import { createServer } from 'node:http';
+import { readFile, writeFile } from 'node:fs/promises';
+import { resolve, extname, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const packageRoot = resolve(process.argv[2] || 'dist/package');
+const modelFile = resolve(process.argv[3] || 'build/fixture.gguf');
+const playwrightPath = resolve('.tools/browser/node_modules/playwright/index.mjs');
+const { chromium } = await import(pathToFileURL(playwrightPath).href);
+const mime = { '.mjs': 'text/javascript', '.js': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json' };
+const server = createServer(async (req, res) => {
+  try {
+    const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    if (pathname === '/') {
+      res.setHeader('Content-Type', 'text/html'); res.end('<!doctype html><title>Core smoke test</title>'); return;
+    }
+    const file = pathname === '/fixture.gguf' ? modelFile : resolve(packageRoot, '.' + pathname);
+    if (file !== modelFile && !file.startsWith(packageRoot + sep)) { res.writeHead(403); res.end(); return; }
+    res.setHeader('Content-Type', mime[extname(file)] || 'application/octet-stream');
+    res.end(await readFile(file));
+  } catch { res.writeHead(404); res.end(); }
+});
+await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+const browser = await chromium.launch({ headless: true });
+const results = [];
+try {
+  const url = `http://127.0.0.1:${server.address().port}`;
+  for (const profile of ['cpu-wasm32', 'cpu-wasm64']) {
+    const page = await browser.newPage();
+    page.on('console', msg => { if (msg.type() === 'error') console.error(msg.text()); });
+    await page.goto(url);
+    const result = await page.evaluate(async profile => {
+      const { createCore, mountReadOnlyFile } = await import('/index.mjs');
+      const core = await createCore({ profile, moduleOptions: { print() {}, printErr() {} } });
+      await core.api.llama_backend_init();
+      const bytes = new Uint8Array(await (await fetch('/fixture.gguf')).arrayBuffer());
+      const mounted = mountReadOnlyFile(core, '/models/test.gguf', {
+        size: bytes.length,
+        read(view, position) { const chunk = bytes.subarray(position, position + view.length); view.set(chunk); return chunk.length; },
+      }, { maxChunkBytes: 1024 });
+      const params = core.allocRecord('llama_model_params');
+      await core.api.llama_model_default_params(params);
+      core.setField('llama_model_params', params, 'n_gpu_layers', 0);
+      core.setField('llama_model_params', params, 'load_mode', core.constant('LLAMA_LOAD_MODE_NONE'));
+      core.setField('llama_model_params', params, 'lazy_mode', core.constant('LLAMA_LAZY_MODE_OFF'));
+      const path = core.utf8(mounted.path);
+      const model = await core.api.llama_model_load_from_file(path, params);
+      if (!model) throw new Error('Synthetic model load failed');
+      const cp = core.allocRecord('llama_context_params');
+      await core.api.llama_context_default_params(cp);
+      for (const [key, value] of Object.entries({ n_ctx: 128, n_batch: 16, n_ubatch: 16, n_threads: 1, n_threads_batch: 1 })) {
+        core.setField('llama_context_params', cp, key, value);
+      }
+      const ctx = await core.api.llama_init_from_model(model, cp);
+      if (!ctx) throw new Error('Context creation failed');
+      const token = core.alloc(4);
+      const tokenView = core.bytes(token, 4);
+      new DataView(tokenView.buffer, tokenView.byteOffset, 4).setInt32(0, 1, true);
+      const batch = core.allocRecord('llama_batch');
+      await core.api.llama_batch_get_one(batch, token, 1);
+      if (await core.api.llama_decode(ctx, batch) !== 0) throw new Error('Decode failed');
+      const sampler = await core.api.llama_sampler_init_greedy();
+      const sampled = await core.api.llama_sampler_sample(sampler, ctx, -1);
+      if (sampled < 0 || sampled >= 259) throw new Error('Invalid sampled token');
+      const size = await core.api.llama_state_get_size(ctx);
+      const state = core.alloc(size);
+      const used = await core.api.llama_state_get_data(ctx, state, size);
+      if (used <= 0n || await core.api.llama_state_set_data(ctx, state, used) !== used) throw new Error('State roundtrip failed');
+      await core.api.llama_sampler_free(sampler);
+      await core.api.llama_free(ctx);
+      await core.api.llama_model_free(model);
+      for (const pointer of [params, path, cp, token, batch, state]) core.free(pointer);
+      mounted.remove();
+      await core.api.llama_backend_free();
+      return { profile, syntheticModel: true, sampledToken: sampled, stateBytes: String(used), passed: true };
+    }, profile);
+    results.push(result); await page.close();
+  }
+  await writeFile('build/browser-results.json', JSON.stringify(results, null, 2)+'\n');
+  console.log(JSON.stringify(results, null, 2));
+} finally { await browser.close(); server.close(); }

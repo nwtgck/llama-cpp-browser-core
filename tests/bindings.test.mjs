@@ -1,0 +1,91 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { attachCore } from '../runtime/bindings.mjs';
+
+function fixture() {
+  const schema = { schemaSha256: 'a'.repeat(64), abiVersion: 1, functions: [
+    { name: 'llama_echo', export: '_lcb_llama_echo', parameters: [{ kind: 'pointer' }], returnKind: 'pointer' },
+  ], records: [{ name: 'params', id: 0, fields: [
+    { name: 'count', id: 0, kind: 'unsigned' }, { name: 'ptr', id: 1, kind: 'pointer' },
+    { name: 'scale', id: 2, kind: 'float' }, { name: 'values', id: 3, kind: 'array' },
+  ] }], constants: ['TEST'] };
+  let bump = 64;
+  const module = {
+    HEAPU8: new Uint8Array(1024),
+    _lcb_schema_hash: () => 512n, _lcb_abi_version: () => 1, _lcb_pointer_bytes: () => 8,
+    _lcb_sizeof_record: () => 32n, _lcb_alignof_record: () => 8n,
+    _lcb_offsetof_field: (_, id) => [0n, 8n, 16n, 20n][id],
+    _lcb_sizeof_field: (_, id) => [4n, 8n, 4n, 12n][id],
+    _lcb_constant: () => 17n,
+    _lcb_malloc: size => { const result = bump; bump += Number(size); return BigInt(result); },
+    _lcb_free() {}, _lcb_llama_echo: pointer => pointer,
+  };
+  module.HEAPU8.set(new TextEncoder().encode(schema.schemaSha256), 512);
+  return { module, schema, core: attachCore(module, schema) };
+}
+
+test('constants, ABI sizes and field addresses come from the core', () => {
+  const { core } = fixture();
+  assert.equal(core.constant('TEST'), 17);
+  assert.equal(core.recordSize('params'), 32);
+  assert.equal(core.recordAlignment('params'), 8);
+  assert.equal(core.fieldAddress('params', 64n, 'ptr'), 72n);
+});
+test('32-bit integers, pointers and floats are accessed without handwritten offsets', () => {
+  const { core } = fixture(); const p = core.allocRecord('params');
+  core.setField('params', p, 'count', 4294967295);
+  core.setField('params', p, 'ptr', 0x100000000n);
+  core.setField('params', p, 'scale', 0.5);
+  assert.equal(core.getField('params', p, 'count'), 4294967295);
+  assert.equal(core.getField('params', p, 'ptr'), 0x100000000n);
+  assert.equal(core.getField('params', p, 'scale'), 0.5);
+  assert.throws(() => core.setField('params', p, 'count', 2 ** 32), RangeError);
+  assert.throws(() => core.getField('params', p, 'values'), TypeError);
+});
+test('heap replacement is observed instead of keeping stale views', () => {
+  const { module, core } = fixture(); const old = core.bytes(64n, 4);
+  module.HEAPU8 = new Uint8Array(2048);
+  core.bytes(64n, 4).fill(23);
+  assert.deepEqual([...old], [0, 0, 0, 0]);
+  assert.deepEqual([...core.bytes(64n, 4)], [23, 23, 23, 23]);
+});
+test('unsafe indexes and out-of-bounds accesses fail', () => {
+  const { core } = fixture();
+  assert.throws(() => core.bytes(1n << 54n, 1), RangeError);
+  assert.throws(() => core.bytes(1020n, 5), RangeError);
+  assert.throws(() => core.bytes(0n, -1), RangeError);
+});
+test('UTF-8 allocation is terminated and bounded', () => {
+  const { core } = fixture(); const p = core.utf8('\u65e5\u672c\u8a9e');
+  assert.equal(core.readUtf8(p), '\u65e5\u672c\u8a9e');
+  assert.equal(core.readUtf8(0n), null);
+  assert.throws(() => core.readUtf8(p, 2), RangeError);
+});
+test('calls validate the normalized bigint boundary', async () => {
+  const { core } = fixture();
+  assert.equal(await core.api.llama_echo(20n), 20n);
+  await assert.rejects(core.api.llama_echo(20), TypeError);
+  await assert.rejects(core.api.llama_echo(-1n), RangeError);
+  await assert.rejects(core.api.llama_echo(1n << 64n), RangeError);
+});
+test('concurrent and reentrant native calls are rejected rather than queued', async () => {
+  const { module, core } = fixture(); let finish;
+  module._lcb_llama_echo = () => new Promise(resolve => { finish = resolve; });
+  const first = core.api.llama_echo(1n);
+  assert.equal(core.busy, true);
+  await assert.rejects(core.api.llama_echo(2n), /serialize/);
+  assert.throws(() => core.free(64n), /serialize/);
+  finish(7n); assert.equal(await first, 7n); assert.equal(core.busy, false);
+});
+test('missing exports and ABI mismatch fail on attachment', () => {
+  const { module, schema } = fixture();
+  delete module._lcb_llama_echo;
+  assert.throws(() => attachCore(module, schema), /Missing export/);
+  module._lcb_abi_version = () => 2;
+  assert.throws(() => attachCore(module, schema), /ABI versions/);
+});
+
+test('a schema from a different build is rejected', () => {
+  const { module, schema } = fixture();
+  assert.throws(() => attachCore(module, { ...schema, schemaSha256: 'b'.repeat(64) }), /do not match/);
+});

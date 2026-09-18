@@ -1,0 +1,23 @@
+{
+  "cpu-wasm32": {
+    "memory64": false,
+    "webgpu": false,
+    "jspi": false,
+    "pthreads": false,
+    "maximumMemory": 4294967296
+  },
+  "cpu-wasm64": {
+    "memory64": true,
+    "webgpu": false,
+    "jspi": false,
+    "pthreads": false,
+    "maximumMemory": 17179869184
+  },
+  "webgpu-wasm64-jspi": {
+    "memory64": true,
+    "webgpu": true,
+    "jspi": true,
+    "pthreads": false,
+    "maximumMemory": 17179869184
+  }
+}

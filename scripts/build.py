@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""Build one runtime profile without committing generated artifacts."""
+from __future__ import annotations
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import time
+
+ROOT = Path(__file__).resolve().parents[1]
+
+def output(*args, cwd=ROOT):
+    return subprocess.check_output(args, cwd=cwd, text=True).strip()
+
+def main():
+    profiles=json.loads((ROOT/'config/profiles.json').read_text())
+    p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--profile', choices=list(profiles), required=True)
+    p.add_argument('--jobs',type=int,default=min(os.cpu_count() or 2, 8))
+    a=p.parse_args(); cfg=profiles[a.profile]
+    toolchain=json.loads((ROOT/'config/toolchain.json').read_text())
+    src=ROOT/'vendor/llama.cpp'
+    if not (src/'include/llama.h').exists(): p.error('Run git submodule update --init --recursive')
+    sha=output('git','rev-parse','HEAD',cwd=src)
+    if sha != toolchain['llamaCommit']: p.error('Submodule HEAD does not match toolchain.json')
+    if output('git','status','--porcelain','--untracked-files=normal',cwd=src):
+        p.error('Refusing a dirty upstream checkout')
+    version=output('emcc','--version').splitlines()[0]
+    if not re.search(r'(?<!\d)'+re.escape(toolchain['emsdkVersion'])+r'(?!\d)',version):
+        p.error(f'Expected Emscripten {toolchain["emsdkVersion"]}; found {version}')
+    build=ROOT/'build'/a.profile
+    command=['emcmake','cmake','-S',str(ROOT),'-B',str(build),'-G','Ninja',
+             '-DCMAKE_BUILD_TYPE=Release', '-DLCB_MEMORY64='+('ON' if cfg['memory64'] else 'OFF'),
+             '-DLCB_WEBGPU='+('ON' if cfg['webgpu'] else 'OFF'),
+             '-DLCB_MAXIMUM_MEMORY='+str(cfg['maximumMemory'])]
+    if cfg['webgpu']:
+        dawn=ROOT/'.tools/emdawnwebgpu_pkg'
+        if not (dawn/'emdawnwebgpu.port.py').exists(): p.error('Run scripts/setup_toolchain.py to obtain Dawn')
+        command.append('-DEMDAWNWEBGPU_DIR='+str(dawn))
+    subprocess.run(command,check=True)
+    subprocess.run(['cmake','--build',str(build),'--target','core','-j',str(a.jobs)],check=True)
+    provenance={'profile':a.profile,'configuration':cfg,'sourceCommit':output('git','rev-parse','HEAD'),
+                'sourceDirty': bool(output('git','status','--porcelain','--untracked-files=normal')),
+                'llamaCommit':sha,'toolchain':toolchain,'emccVersion':version,
+                'cmakeCommand':command,'builtAtUnix':int(time.time()),
+                'validation':{'compiled':True,'realModelInference':False,'browserSmoke':False}}
+    (build/'provenance.json').write_text(json.dumps(provenance,indent=2)+'\n')
+    print(build/'runtime/core.mjs')
+if __name__=='__main__': main()
