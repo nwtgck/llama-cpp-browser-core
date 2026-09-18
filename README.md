@@ -9,10 +9,10 @@ Applications own model downloads, storage, workers, generation loops, and conver
 Install a specific **artifact commit**, not a commit from a source branch:
 
 ```sh
-npm install github:OWNER/llama-cpp-browser-core#ARTIFACT_COMMIT_SHA
+npm install github:nwtgck/llama-cpp-browser-core#ARTIFACT_COMMIT_SHA
 ```
 
-Replace `OWNER` and `ARTIFACT_COMMIT_SHA` with the repository owner and the chosen artifact commit. No npm registry publication or install-time C/C++ compilation is required.
+Replace `ARTIFACT_COMMIT_SHA` with the complete commit hash of the chosen runtime artifacts. No npm registry publication or install-time C/C++ compilation is required.
 
 ```js
 import { createCore } from 'llama-cpp-browser-core';

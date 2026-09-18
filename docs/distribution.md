@@ -22,8 +22,6 @@ When concurrent builds race, the losing publisher fetches the new tip and recrea
 
 The build job has read permission; only the publication job has write permission. Credentials are supplied through a process-local HTTP header rather than stored in the remote URL. Anyone who can push a source branch can change the resulting artifact; the workflow does not grant publication credentials to untrusted external pull requests.
 
-Source and artifact commits use Conventional Commits. Publication creates `build(artifacts): ...` commits with author `Ryo Ota <nwtgck@nwtgck.org>` and the trailer `Co-authored-by: ChatGPT <noreply@openai.com>`. The automated committer remains the GitHub Actions bot.
-
 ## Release checks
 
 Publication requires all three profile builds, Chromium tests for the two CPU profiles, and package verification. The workflow compiles WebGPU but does not record GPU inference as verified. CPU smoke tests use a small untrained synthetic GGUF, not a quality benchmark or a multi-GiB model acceptance test.

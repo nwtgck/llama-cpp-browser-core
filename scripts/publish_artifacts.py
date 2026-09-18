@@ -45,9 +45,14 @@ def publish(package: Path, remote: str, branch='artifacts', attempts=20):
             command=['git','commit-tree',tree]
             if parent: command+=['-p',parent]
             command+=['-m',f'build(artifacts): publish runtime from {source[:12]}',
-                      '-m',f'Source-commit: {source}\nCo-authored-by: ChatGPT <noreply@openai.com>']
+                      '-m',f'Source-commit: {source}']
             commit_env=os.environ.copy()
-            commit_env.update({'GIT_AUTHOR_NAME':'Ryo Ota','GIT_AUTHOR_EMAIL':'nwtgck@nwtgck.org'})
+            commit_env.update({
+                'GIT_AUTHOR_NAME':'github-actions[bot]',
+                'GIT_AUTHOR_EMAIL':'41898282+github-actions[bot]@users.noreply.github.com',
+                'GIT_COMMITTER_NAME':'github-actions[bot]',
+                'GIT_COMMITTER_EMAIL':'41898282+github-actions[bot]@users.noreply.github.com',
+            })
             commit=run(*command,cwd=work,env=commit_env).stdout.strip()
             pushed=run('git','push','origin',f'{commit}:{ref}',cwd=work,check=False)
             if pushed.returncode==0: return commit
@@ -73,7 +78,7 @@ def main():
     if os.environ.get('GITHUB_OUTPUT'):
         with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('commit='+commit+'\n')
     if os.environ.get('GITHUB_STEP_SUMMARY'):
-        repo=os.environ.get('GITHUB_REPOSITORY','OWNER/REPOSITORY')
+        repo=os.environ.get('GITHUB_REPOSITORY','nwtgck/llama-cpp-browser-core')
         with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
             f.write(f'## Runtime artifact commit\n\n`{commit}`\n\n```sh\nnpm install github:{repo}#{commit}\n```\n')
 if __name__=='__main__': main()
