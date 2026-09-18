@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "sourceCommit": "cc995b61599f86bf0925037158a4e11ef45c3b69",
+  "sourceCommit": "146c44e45ce28433446a1f1333fd8d2b3cca6a7c",
   "llamaCommit": "3057bb66c86c46d5781e50e85462a760ba7d1feb",
   "profiles": {
     "cpu-wasm32": {
@@ -12,7 +12,7 @@
         "pthreads": false,
         "maximumMemory": 4294967296
       },
-      "sourceCommit": "cc995b61599f86bf0925037158a4e11ef45c3b69",
+      "sourceCommit": "146c44e45ce28433446a1f1333fd8d2b3cca6a7c",
       "sourceDirty": false,
       "sourceStatusBeforeBuild": [],
       "sourceStatusAfterBuild": [],
@@ -41,7 +41,7 @@
         "-DLCB_WEBGPU=OFF",
         "-DLCB_MAXIMUM_MEMORY=4294967296"
       ],
-      "builtAtUnix": 1789743614,
+      "builtAtUnix": 1789756037,
       "validation": {
         "compiled": true,
         "realModelInference": false,
@@ -64,7 +64,7 @@
         "pthreads": false,
         "maximumMemory": 17179869184
       },
-      "sourceCommit": "cc995b61599f86bf0925037158a4e11ef45c3b69",
+      "sourceCommit": "146c44e45ce28433446a1f1333fd8d2b3cca6a7c",
       "sourceDirty": false,
       "sourceStatusBeforeBuild": [],
       "sourceStatusAfterBuild": [],
@@ -93,7 +93,7 @@
         "-DLCB_WEBGPU=OFF",
         "-DLCB_MAXIMUM_MEMORY=17179869184"
       ],
-      "builtAtUnix": 1789743723,
+      "builtAtUnix": 1789756127,
       "validation": {
         "compiled": true,
         "realModelInference": false,
@@ -116,7 +116,7 @@
         "pthreads": false,
         "maximumMemory": 17179869184
       },
-      "sourceCommit": "cc995b61599f86bf0925037158a4e11ef45c3b69",
+      "sourceCommit": "146c44e45ce28433446a1f1333fd8d2b3cca6a7c",
       "sourceDirty": false,
       "sourceStatusBeforeBuild": [],
       "sourceStatusAfterBuild": [],
@@ -146,7 +146,7 @@
         "-DLCB_MAXIMUM_MEMORY=17179869184",
         "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
       ],
-      "builtAtUnix": 1789743808,
+      "builtAtUnix": 1789756203,
       "validation": {
         "compiled": true,
         "realModelInference": false,
@@ -167,8 +167,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 2395,
-      "sha256": "7f1f67c2de9430280a3e246e635f8932f9e11e8e606effe4e1ef11f5672a77b0"
+      "bytes": 2390,
+      "sha256": "a2a8c77b49c810221123c037adbd31c4cf7d67f752ecfc82f1c88019f9539807"
     },
     {
       "path": "api/exports.json",
