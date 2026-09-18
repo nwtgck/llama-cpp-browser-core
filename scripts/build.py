@@ -7,12 +7,19 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
 
 def output(*args, cwd=ROOT):
     return subprocess.check_output(args, cwd=cwd, text=True).strip()
+
+def source_status(directory: Path) -> list[str]:
+    return subprocess.check_output(
+        ['git', 'status', '--porcelain=v1', '--untracked-files=all', '--ignore-submodules=none'],
+        cwd=directory, text=True,
+    ).splitlines()
 
 def main():
     profiles=json.loads((ROOT/'config/profiles.json').read_text())
@@ -25,11 +32,14 @@ def main():
     if not (src/'include/llama.h').exists(): p.error('Run git submodule update --init --recursive')
     sha=output('git','rev-parse','HEAD',cwd=src)
     if sha != toolchain['llamaCommit']: p.error('Submodule HEAD does not match toolchain.json')
-    if output('git','status','--porcelain','--untracked-files=normal',cwd=src):
-        p.error('Refusing a dirty upstream checkout')
+    upstream_status=source_status(src)
+    if upstream_status:
+        p.error('Refusing a dirty upstream checkout:\n'+'\n'.join(upstream_status))
     version=output('emcc','--version').splitlines()[0]
     if not re.search(r'(?<!\d)'+re.escape(toolchain['emsdkVersion'])+r'(?!\d)',version):
         p.error(f'Expected Emscripten {toolchain["emsdkVersion"]}; found {version}')
+    source_commit=output('git','rev-parse','HEAD')
+    status_before=source_status(ROOT)
     build=ROOT/'build'/a.profile
     command=['emcmake','cmake','-S',str(ROOT),'-B',str(build),'-G','Ninja',
              '-DCMAKE_BUILD_TYPE=Release', '-DLCB_MEMORY64='+('ON' if cfg['memory64'] else 'OFF'),
@@ -39,10 +49,19 @@ def main():
         dawn=ROOT/'.tools/emdawnwebgpu_pkg'
         if not (dawn/'emdawnwebgpu.port.py').exists(): p.error('Run scripts/setup_toolchain.py to obtain Dawn')
         command.append('-DEMDAWNWEBGPU_DIR='+str(dawn))
-    subprocess.run(command,check=True)
-    subprocess.run(['cmake','--build',str(build),'--target','core','-j',str(a.jobs)],check=True)
-    provenance={'profile':a.profile,'configuration':cfg,'sourceCommit':output('git','rev-parse','HEAD'),
-                'sourceDirty': bool(output('git','status','--porcelain','--untracked-files=normal')),
+    # CMake configure-time probes can write into the process working directory.
+    # Keep those incidental outputs in the ignored build tree, not in the source tree.
+    build.mkdir(parents=True,exist_ok=True)
+    subprocess.run(command,cwd=build,check=True)
+    subprocess.run(['cmake','--build',str(build),'--target','core','-j',str(a.jobs)],cwd=build,check=True)
+    status_after=source_status(ROOT)
+    if status_before or status_after:
+        print('Source changes detected; this build cannot be published:\n'+json.dumps({
+            'beforeBuild':status_before,'afterBuild':status_after,
+        },indent=2),file=sys.stderr)
+    provenance={'profile':a.profile,'configuration':cfg,'sourceCommit':source_commit,
+                'sourceDirty': bool(status_before or status_after),
+                'sourceStatusBeforeBuild':status_before,'sourceStatusAfterBuild':status_after,
                 'llamaCommit':sha,'toolchain':toolchain,'emccVersion':version,
                 'cmakeCommand':command,'builtAtUnix':int(time.time()),
                 'validation':{'compiled':True,'realModelInference':False,'browserSmoke':False}}

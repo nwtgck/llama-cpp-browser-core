@@ -36,7 +36,10 @@ def validate(directory: Path, require_clean=True):
             raise ValueError(f'Invalid payload: {rel}')
         if path.stat().st_size >= 100*1024**2: raise ValueError(f'GitHub single-file size guard exceeded: {rel}')
     for name, info in manifest['profiles'].items():
-        if require_clean and info['sourceDirty']: raise ValueError('Cannot publish a dirty source build')
+        if require_clean and info['sourceDirty']:
+            details={key:info.get(key,'not recorded') for key in
+                     ('sourceStatusBeforeBuild','sourceStatusAfterBuild')}
+            raise ValueError(f'Cannot publish a dirty source build: {name}\n'+json.dumps(details,indent=2))
         for ext in ('mjs','wasm'):
             if f'profiles/{name}/core.{ext}' not in expected: raise ValueError(f'Missing {name} runtime')
         if (directory/f'profiles/{name}/core.wasm').read_bytes()[:8] != b'\x00asm\x01\x00\x00\x00':

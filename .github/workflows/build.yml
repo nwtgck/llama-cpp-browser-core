@@ -57,6 +57,13 @@ jobs:
           path: dist/package/
           if-no-files-found: error
           retention-days: 14
+      - name: Report source changes after a failure
+        if: failure()
+        run: |
+          git status --short --untracked-files=all --ignore-submodules=none
+          git diff --stat
+          git diff --cached --stat
+          git submodule foreach --recursive 'git status --short --untracked-files=all --ignore-submodules=none'
   publish:
     needs: build
     runs-on: ubuntu-24.04

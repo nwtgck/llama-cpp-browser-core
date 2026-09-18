@@ -51,6 +51,40 @@ class Distribution(unittest.TestCase):
         path=self.root/'build/cpu-wasm32/provenance.json'
         value=json.loads(path.read_text()); value['sourceDirty']=True; path.write_text(json.dumps(value)); self.assemble()
         with self.assertRaises(ValueError): validate(self.package)
+    def test_dirty_source_error_identifies_profile_and_changed_paths(self):
+        path=self.root/'build/cpu-wasm32/provenance.json'
+        value=json.loads(path.read_text())
+        value.update({'sourceDirty':True,'sourceStatusBeforeBuild':[],
+                      'sourceStatusAfterBuild':['?? configure-probe.tmp']})
+        path.write_text(json.dumps(value)); self.assemble()
+        with self.assertRaises(ValueError) as error:
+            validate(self.package)
+        self.assertIn('cpu-wasm32',str(error.exception))
+        self.assertIn('configure-probe.tmp',str(error.exception))
+        self.assertIn('sourceStatusAfterBuild',str(error.exception))
+
+    def test_browser_validation_does_not_clear_dirty_provenance(self):
+        script=self.root/'scripts/record_browser_validation.py'
+        script.parent.mkdir()
+        shutil.copy2(ROOT/'scripts/record_browser_validation.py',script)
+        results=[]
+        for profile in ('cpu-wasm32','cpu-wasm64'):
+            path=self.root/'build'/profile/'provenance.json'
+            path.parent.mkdir(parents=True,exist_ok=True)
+            value={**self.provenance,'profile':profile,'sourceDirty':True,
+                   'sourceStatusBeforeBuild':[' M README.md'],'sourceStatusAfterBuild':[]}
+            path.write_text(json.dumps(value))
+            results.append({'profile':profile,'passed':True,'syntheticModel':True})
+        (self.root/'build/browser-results.json').write_text(json.dumps(results))
+        subprocess.run([sys.executable,str(script)],check=True,capture_output=True,text=True)
+        for result in results:
+            value=json.loads((self.root/'build'/result['profile']/'provenance.json').read_text())
+            self.assertTrue(value['sourceDirty'])
+            self.assertTrue(value['validation']['browserSmoke'])
+            self.assertEqual(value['sourceStatusBeforeBuild'],[' M README.md'])
+        self.assemble()
+        with self.assertRaises(ValueError): validate(self.package)
+
     def test_append_only_publication_preserves_old_sha_and_npm_install(self):
         remote=self.root/'remote.git'; git('init','--bare','--quiet',str(remote))
         first=publish(self.package,str(remote))
