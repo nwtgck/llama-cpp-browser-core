@@ -6,6 +6,8 @@ import { pathToFileURL } from 'node:url';
 
 const packageRoot = resolve(process.argv[2] || 'dist/package');
 const modelFile = resolve(process.argv[3] || 'build/fixture.gguf');
+const chatTestFile = resolve('tests/chat-surface.mjs');
+const chatTemplate = await readFile('vendor/llama.cpp/models/templates/Qwen-Qwen3-0.6B.jinja', 'utf8');
 const playwrightPath = resolve('.tools/browser/node_modules/playwright/index.mjs');
 const { chromium } = await import(pathToFileURL(playwrightPath).href);
 const mime = { '.mjs': 'text/javascript', '.js': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json' };
@@ -15,8 +17,8 @@ const server = createServer(async (req, res) => {
     if (pathname === '/') {
       res.setHeader('Content-Type', 'text/html'); res.end('<!doctype html><title>Core smoke test</title>'); return;
     }
-    const file = pathname === '/fixture.gguf' ? modelFile : resolve(packageRoot, '.' + pathname);
-    if (file !== modelFile && !file.startsWith(packageRoot + sep)) { res.writeHead(403); res.end(); return; }
+    const file = pathname === '/fixture.gguf' ? modelFile : pathname === '/chat-surface.mjs' ? chatTestFile : resolve(packageRoot, '.' + pathname);
+    if (file !== modelFile && file !== chatTestFile && !file.startsWith(packageRoot + sep)) { res.writeHead(403); res.end(); return; }
     res.setHeader('Content-Type', mime[extname(file)] || 'application/octet-stream');
     res.end(await readFile(file));
   } catch { res.writeHead(404); res.end(); }
@@ -30,8 +32,12 @@ try {
     const page = await browser.newPage();
     page.on('console', msg => { if (msg.type() === 'error') console.error(msg.text()); });
     await page.goto(url);
-    const result = await page.evaluate(async profile => {
-      const { createCore, mountReadOnlyFile } = await import('/index.mjs');
+    const result = await page.evaluate(async ({ profile, chatTemplate }) => {
+      const { default: createNative } = await import(`/profiles/${profile}/core.mjs`);
+      const native = await createNative({ print() {}, printErr() {} });
+      const { checkChatSurface } = await import('/chat-surface.mjs');
+      const chatSurface = checkChatSurface(native, chatTemplate);
+      const { createCore, mountReadOnlyFile } = await import('/examples/runtime/index.mjs');
       const core = await createCore({ profile, moduleOptions: { print() {}, printErr() {} } });
       await core.api.llama_backend_init();
       const bytes = new Uint8Array(await (await fetch('/fixture.gguf')).arrayBuffer());
@@ -73,8 +79,8 @@ try {
       for (const pointer of [params, path, cp, token, batch, state]) core.free(pointer);
       mounted.remove();
       await core.api.llama_backend_free();
-      return { profile, syntheticModel: true, sampledToken: sampled, stateBytes: String(used), passed: true };
-    }, profile);
+      return { profile, syntheticModel: true, sampledToken: sampled, stateBytes: String(used), chatSurface, passed: true };
+    }, { profile, chatTemplate });
     results.push(result); await page.close();
   }
   await writeFile('build/browser-results.json', JSON.stringify(results, null, 2)+'\n');

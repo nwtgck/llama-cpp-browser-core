@@ -24,9 +24,11 @@ def walk(node):
 def generate(source: Path, output: Path, compiler: str) -> dict:
     output.mkdir(parents=True, exist_ok=True)
     unit = output / 'headers.c'
-    unit.write_text('#include "llama.h"\n#include "gguf.h"\n#include "ggml-backend.h"\n')
+    unit.write_text('#include "llama.h"\n#include "gguf.h"\n#include "ggml-backend.h"\n'
+                    '#include "mtmd.h"\n#include "mtmd-helper.h"\n')
     command = [compiler, '-x', 'c', '-std=c11', '-fsyntax-only',
                '-I'+str(source/'include'), '-I'+str(source/'ggml/include'),
+               '-I'+str(source/'tools/mtmd'),
                '-Xclang', '-ast-dump=json', str(unit)]
     ast = json.loads(subprocess.check_output(command, text=True))
     nodes = list(walk(ast))
@@ -73,7 +75,10 @@ def generate(source: Path, output: Path, compiler: str) -> dict:
     functions, excluded = [], []
     for n in nodes:
         name = n.get('name', '')
-        if n.get('kind') != 'FunctionDecl' or not (name.startswith(('llama_', 'gguf_', 'ggml_backend_')) or name in EXTRA_FUNCTIONS):
+        if n.get('kind') != 'FunctionDecl' or not (name.startswith(('llama_', 'gguf_', 'ggml_backend_', 'mtmd_')) or name in EXTRA_FUNCTIONS):
+            continue
+        if name.startswith('mtmd_helper_video_') and name != 'mtmd_helper_video_init_params_default':
+            excluded.append({'name': name, 'reason': 'requires subprocess video support (MTMD_VIDEO=OFF)'})
             continue
         if any(x.get('kind') == 'DeprecatedAttr' for x in n.get('inner', [])) or n.get('variadic'):
             excluded.append({'name': name, 'reason': 'deprecated' if not n.get('variadic') else 'variadic'})
@@ -91,7 +96,7 @@ def generate(source: Path, output: Path, compiler: str) -> dict:
     records = []
     for n in nodes:
         name = n.get('name', '')
-        if n.get('kind') != 'RecordDecl' or not n.get('completeDefinition') or not name.startswith(('llama_', 'gguf_', 'ggml_backend_')) and name != 'ggml_tensor':
+        if n.get('kind') != 'RecordDecl' or not n.get('completeDefinition') or not name.startswith(('llama_', 'gguf_', 'ggml_backend_', 'mtmd_')) and name != 'ggml_tensor':
             continue
         fields = []
         for p in n.get('inner', []):
@@ -108,10 +113,11 @@ def generate(source: Path, output: Path, compiler: str) -> dict:
         records.append({'name': name, 'cType': n.get('tagUsed', 'struct')+' '+name, 'fields': fields})
     records = sorted({r['name']: r for r in records}.values(), key=lambda r: r['name'])
     enum_names = sorted({n['name'] for n in nodes if n.get('kind') == 'EnumConstantDecl'
-                         and n.get('name','').startswith(('LLAMA_', 'GGML_', 'GGUF_'))})
+                         and n.get('name','').startswith(('LLAMA_', 'GGML_', 'GGUF_', 'MTMD_'))})
     constants = sorted(set(enum_names + EXTRA_CONSTANTS))
     cpp = ['// Generated; do not edit.', '#include "llama.h"', '#include "gguf.h"',
-           '#include "ggml-backend.h"', '#include <stdint.h>', '#include <stddef.h>',
+           '#include "ggml-backend.h"', '#include "mtmd.h"', '#include "mtmd-helper.h"',
+           '#include <stdint.h>', '#include <stddef.h>',
            '#include <errno.h>', '#include <stdlib.h>', '#include <stdexcept>',
            'static uintptr_t lcb_checked_pointer(uint64_t p) {',
            '  if (p > UINTPTR_MAX) throw std::range_error("pointer/size exceeds address space");',

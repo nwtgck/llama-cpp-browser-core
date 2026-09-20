@@ -11,6 +11,27 @@ import tempfile
 
 ROOT=Path(__file__).resolve().parents[1]
 RUNTIME_NAME='llama-cpp-browser-core'
+# Preserve complete original files where notices are embedded in source. This
+# avoids extracting only one of a header's licenses or dropping contributor text.
+EMBEDDED_NOTICE_FILES = (
+    'vendor/miniaudio/miniaudio.h',
+    'vendor/stb/stb_image.h',
+    'vendor/nlohmann/json.hpp',
+    'vendor/nlohmann/json_fwd.hpp',
+    'vendor/sheredom/subprocess.h',
+    'vendor/hash/sha1/sha1.c',
+)
+EXAMPLE_RUNTIME_FILES = ('index.mjs', 'index.d.ts', 'bindings.mjs', 'read-only-file.mjs', 'README.md')
+
+
+def copy_embedded_notices(source: Path, destination: Path):
+    for relative in EMBEDDED_NOTICE_FILES:
+        original=source/relative
+        if not original.is_file() or original.is_symlink():
+            raise ValueError(f'Missing embedded notice source: {original}')
+        target=destination/(relative+'.txt')
+        target.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copy2(original,target)
 
 
 def sha(path):
@@ -24,6 +45,11 @@ def validate(directory: Path, require_clean=True):
     if package['name']!=RUNTIME_NAME: raise ValueError('Wrong package name')
     manifest=json.loads((directory/'manifest.json').read_text())
     expected={f['path']:f for f in manifest['files']}
+    required_notices={'licenses/embedded/'+path+'.txt' for path in EMBEDDED_NOTICE_FILES}
+    if not required_notices.issubset(expected):
+        raise ValueError('Missing embedded third-party license notices')
+    if not {'examples/runtime/'+path for path in EXAMPLE_RUNTIME_FILES}.issubset(expected):
+        raise ValueError('Missing example runtime files')
     actual={p.relative_to(directory).as_posix() for p in directory.rglob('*') if p.is_file()}
     if actual != set(expected)|{'manifest.json'}: raise ValueError('Manifest does not exactly cover the package tree')
     if (directory/'.gitmodules').exists() or (directory/'binding.gyp').exists(): raise ValueError('Source/build input in runtime')
@@ -40,7 +66,7 @@ def validate(directory: Path, require_clean=True):
             details={key:info.get(key,'not recorded') for key in
                      ('sourceStatusBeforeBuild','sourceStatusAfterBuild')}
             raise ValueError(f'Cannot publish a dirty source build: {name}\n'+json.dumps(details,indent=2))
-        for ext in ('mjs','wasm'):
+        for ext in ('mjs','wasm','d.ts'):
             if f'profiles/{name}/core.{ext}' not in expected: raise ValueError(f'Missing {name} runtime')
         if (directory/f'profiles/{name}/core.wasm').read_bytes()[:8] != b'\x00asm\x01\x00\x00\x00':
             raise ValueError('Not a WebAssembly module')
@@ -73,9 +99,11 @@ def build_package(build_root: Path, destination: Path, profiles: list[str], *, l
                 (out/'api').mkdir()
                 for file in ('schema.json','schema.mjs','functions.d.ts','exports.json'):
                     shutil.copy2(generated/file,out/'api'/file)
-        for file in ('index.mjs','index.d.ts','bindings.mjs','read-only-file.mjs'):
-            shutil.copy2(ROOT/'runtime'/file,out/file)
+        example=out/'examples/runtime'; example.mkdir(parents=True)
+        for file in EXAMPLE_RUNTIME_FILES:
+            shutil.copy2(ROOT/'examples/runtime'/file,example/file)
         shutil.copy2(ROOT/'packaging/README.md',out/'README.md')
+        shutil.copy2(ROOT/'docs/chat-and-multimodal.md',out/'chat-and-multimodal.md')
         shutil.copy2(ROOT/'LICENSE',out/'LICENSE')
         licenses=out/'licenses'; licenses.mkdir()
         copied=0
@@ -87,10 +115,11 @@ def build_package(build_root: Path, destination: Path, profiles: list[str], *, l
                     target=licenses/str(i)/p.relative_to(root)
                     target.parent.mkdir(parents=True,exist_ok=True); shutil.copy2(p,target); copied+=1
         if not copied: raise ValueError('No third-party license notices collected')
+        copy_embedded_notices(ROOT/'vendor/llama.cpp', licenses/'embedded')
         pkg={'name':RUNTIME_NAME,'version':'0.1.0','private':True,'type':'module','license':'MIT',
-             'main':'./index.mjs','types':'./index.d.ts',
-             'files':['index.mjs','index.d.ts','bindings.mjs','read-only-file.mjs','profiles/','api/','manifest.json','licenses/','README.md','LICENSE'],
-             'exports':{'.':{'types':'./index.d.ts','import':'./index.mjs'},
+             'files':['examples/','profiles/','api/','manifest.json','licenses/','README.md','chat-and-multimodal.md','LICENSE'],
+             'exports':{'./examples/runtime':{'types':'./examples/runtime/index.d.ts','import':'./examples/runtime/index.mjs'},
+                        './profiles/*/core.mjs':{'types':'./profiles/*/core.d.ts','import':'./profiles/*/core.mjs'},
                         './profiles/*':'./profiles/*','./api/*':'./api/*','./manifest.json':'./manifest.json'}}
         (out/'package.json').write_text(json.dumps(pkg,indent=2)+'\n')
         manifest={'formatVersion':1,'sourceCommit':source,'llamaCommit':upstream,'profiles':provenance,

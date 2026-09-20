@@ -1,8 +1,8 @@
 # llama-cpp-browser-core
 
-A low-level [llama.cpp](https://github.com/ggml-org/llama.cpp) runtime for browser applications. This repository builds WebAssembly and Emscripten JavaScript, then publishes the runtime package to a separate Git branch.
+A low-level [llama.cpp](https://github.com/ggml-org/llama.cpp) Wasm build. This repository keeps the heavy WebAssembly build and artifact publication independent of application builds.
 
-Applications own model downloads, storage, workers, generation loops, and conversation formats. The core exposes the underlying operations without imposing a chat API or an OPFS directory layout.
+Applications own model downloads, storage, workers, generation loops, and conversation formats. The generated Emscripten module exposes upstream operations. `examples/runtime/` is always included as tested reference code for application host implementations; importing it is optional. The public bindings may change with the pinned upstream version.
 
 ## Install a runtime
 
@@ -15,7 +15,7 @@ npm install github:nwtgck/llama-cpp-browser-core#ARTIFACT_COMMIT_SHA
 Replace `ARTIFACT_COMMIT_SHA` with the complete commit hash of the chosen runtime artifacts. No npm registry publication or install-time C/C++ compilation is required.
 
 ```js
-import { createCore } from 'llama-cpp-browser-core';
+import { createCore } from 'llama-cpp-browser-core/examples/runtime';
 
 const core = await createCore({ profile: 'cpu-wasm32' });
 await core.api.llama_backend_init();
@@ -89,9 +89,9 @@ The artifact branch tip is the most recently published result, not necessarily a
 
 ## Scope and limitations
 
-The bindings generator exposes non-deprecated, non-variadic llama.cpp, GGUF, and selected backend functions. It generates types and a schema fingerprint, while the native core reports structure layouts. Normalized pointers and sizes use JavaScript `bigint`. Raw upstream exports are also available to callers that understand the exact native ABI.
+The C bindings generator exposes non-deprecated, non-variadic llama.cpp, GGUF, selected backend, and multimodal functions. Standard Embind registrations expose upstream chat types, Jinja, tool parsing, grammar conversion, and reasoning-budget primitives. See [native chat and multimodal bindings](docs/chat-and-multimodal.md). The generated C schema and layout queries use normalized `bigint` pointers/sizes; Embind uses its standard type and lifetime conventions.
 
-`mountReadOnlyFile` connects synchronous range reads to the ordinary model loader without creating an additional file-wide JavaScript buffer. It does not eliminate the model's resident memory requirements or the upstream GPU loader's tensor-sized staging buffers. Bounded GPU staging, pthread profiles, and `mtmd` integration are not implemented.
+`mountReadOnlyFile` connects synchronous range reads to the ordinary model loader without creating an additional file-wide JavaScript buffer. It does not eliminate the model's resident memory requirements or the upstream GPU loader's tensor-sized staging buffers. Bounded GPU staging and pthread profiles are not implemented. Multimodal video subprocess helpers are excluded; image/audio model execution needs separate validation, and some upstream audio paths require threads.
 
 WebGPU is experimental; the workflow compiles that profile but does not certify GPU inference on real devices. Small synthetic-model tests do not establish multi-GiB model support or broad browser compatibility.
 

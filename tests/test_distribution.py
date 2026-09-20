@@ -25,6 +25,7 @@ class Distribution(unittest.TestCase):
         (build/'runtime').mkdir(parents=True); (build/'generated').mkdir()
         (build/'runtime/core.wasm').write_bytes(b'\0asm\1\0\0\0')
         (build/'runtime/core.mjs').write_text('export default async () => ({ fixture: true });\n')
+        (build/'runtime/core.d.ts').write_text('export default function create(): Promise<{ fixture: boolean }>;\n')
         for name,content in {'schema.json':'{}','schema.mjs':'export default {};',
                              'functions.d.ts':'export interface LowLevelFunctions {}', 'exports.json':'[]'}.items():
             (build/'generated'/name).write_text(content)
@@ -47,6 +48,41 @@ class Distribution(unittest.TestCase):
     def test_payload_tampering_is_rejected(self):
         (self.package/'profiles/cpu-wasm32/core.wasm').write_bytes(b'bad')
         with self.assertRaises(ValueError): validate(self.package)
+    def test_embedded_upstream_notices_are_preserved_verbatim(self):
+        # These libraries carry notices inside source, not standalone LICENSE files.
+        for relative in ('vendor/miniaudio/miniaudio.h', 'vendor/stb/stb_image.h',
+                         'vendor/nlohmann/json.hpp', 'vendor/nlohmann/json_fwd.hpp',
+                         'vendor/sheredom/subprocess.h', 'vendor/hash/sha1/sha1.c'):
+            with self.subTest(source=relative):
+                original=ROOT/'vendor/llama.cpp'/relative
+                packaged=self.package/'licenses/embedded'/(relative+'.txt')
+                self.assertEqual(packaged.read_bytes(), original.read_bytes())
+    def test_removed_notice_is_rejected_even_if_manifest_is_updated(self):
+        relative='licenses/embedded/vendor/miniaudio/miniaudio.h.txt'
+        (self.package/relative).unlink()
+        path=self.package/'manifest.json'
+        manifest=json.loads(path.read_text())
+        manifest['files']=[entry for entry in manifest['files'] if entry['path'] != relative]
+        path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, 'Missing embedded third-party license notices'):
+            validate(self.package)
+    def test_example_runtime_is_shipped_with_resolvable_relative_imports(self):
+        for name in ('index.mjs', 'index.d.ts', 'bindings.mjs', 'read-only-file.mjs', 'README.md'):
+            self.assertEqual((self.package/'examples/runtime'/name).read_bytes(),
+                             (ROOT/'examples/runtime'/name).read_bytes())
+        package=json.loads((self.package/'package.json').read_text())
+        self.assertEqual(package['exports']['./examples/runtime']['import'], './examples/runtime/index.mjs')
+        code="import('./examples/runtime/index.mjs').then(m => { if (typeof m.createCore !== 'function') throw Error('missing example loader'); })"
+        subprocess.run(['node', '--input-type=module', '-e', code], cwd=self.package, check=True)
+    def test_missing_example_runtime_is_rejected_even_if_manifest_is_updated(self):
+        relative='examples/runtime/bindings.mjs'
+        (self.package/relative).unlink()
+        path=self.package/'manifest.json'
+        manifest=json.loads(path.read_text())
+        manifest['files']=[entry for entry in manifest['files'] if entry['path'] != relative]
+        path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, 'Missing example runtime files'):
+            validate(self.package)
     def test_extra_file_is_rejected(self):
         (self.package/'unlisted').write_text('stale asset')
         with self.assertRaises(ValueError): validate(self.package)

@@ -29,7 +29,9 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${LCB_LLAMA_SOURCE}/include/llama.h"
     "${LCB_LLAMA_SOURCE}/ggml/include/ggml.h"
     "${LCB_LLAMA_SOURCE}/ggml/include/ggml-backend.h"
-    "${LCB_LLAMA_SOURCE}/ggml/include/gguf.h")
+    "${LCB_LLAMA_SOURCE}/ggml/include/gguf.h"
+    "${LCB_LLAMA_SOURCE}/tools/mtmd/mtmd.h"
+    "${LCB_LLAMA_SOURCE}/tools/mtmd/mtmd-helper.h")
 
 # Flags affecting the ABI must also apply to the outer bridge target.
 if(EMSCRIPTEN)
@@ -43,9 +45,12 @@ endif()
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(LLAMA_WASM_MEM64 ${LCB_MEMORY64} CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_HTML OFF CACHE BOOL "" FORCE)
-foreach(option BUILD_COMMON BUILD_TESTS BUILD_TOOLS BUILD_EXAMPLES BUILD_SERVER BUILD_APP BUILD_MTMD OPENSSL SUBPROCESS)
+foreach(option BUILD_TESTS BUILD_TOOLS BUILD_EXAMPLES BUILD_SERVER BUILD_APP OPENSSL SUBPROCESS LLGUIDANCE)
     set(LLAMA_${option} OFF CACHE BOOL "" FORCE)
 endforeach()
+set(LLAMA_BUILD_COMMON ON CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_MTMD ON CACHE BOOL "" FORCE)
+set(MTMD_VIDEO OFF CACHE BOOL "" FORCE)
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 set(GGML_BLAS OFF CACHE BOOL "" FORCE)
@@ -63,10 +68,11 @@ if(LCB_NATIVE_CHECK)
         target_link_options(core PRIVATE -Wl,--no-undefined)
     endif()
 else()
-    add_executable(core "${LCB_GENERATED}/bindings.cpp")
+    add_executable(core "${LCB_GENERATED}/bindings.cpp" bridge/chat-embind.cpp)
     set_target_properties(core PROPERTIES SUFFIX ".mjs" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/runtime")
     target_link_options(core PRIVATE
-        --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createLlamaCppCore
+        --bind --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createLlamaCppCore
+        --emit-tsd "${CMAKE_CURRENT_BINARY_DIR}/runtime/core.d.ts"
         -sENVIRONMENT=web,worker,node -sALLOW_MEMORY_GROWTH=1
         "-sMAXIMUM_MEMORY=${LCB_MAXIMUM_MEMORY}" -sINITIAL_HEAP=33554432
         -sSTACK_SIZE=2097152 -sWASM_BIGINT=1 -sALLOW_TABLE_GROWTH=1
@@ -79,5 +85,6 @@ else()
         target_link_options(core PRIVATE -sJSPI=1 "-sJSPI_EXPORTS=@${LCB_GENERATED}/jspi-exports.json")
     endif()
 endif()
-target_include_directories(core PRIVATE "${LCB_LLAMA_SOURCE}/include" "${LCB_LLAMA_SOURCE}/ggml/include")
-target_link_libraries(core PRIVATE llama)
+target_include_directories(core PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${LCB_LLAMA_SOURCE}"
+    "${LCB_LLAMA_SOURCE}/include" "${LCB_LLAMA_SOURCE}/ggml/include")
+target_link_libraries(core PRIVATE llama-common mtmd llama)
