@@ -1,5 +1,9 @@
 /** Thin host bindings. This file contains no model lifecycle or generation policy. */
-export function attachCore(module, schema) {
+export function attachCore(module, schema, { suspension = 'direct' } = {}) {
+  if (!['direct', 'asyncify'].includes(suspension)) throw new TypeError('Unknown suspension mode');
+  if (suspension === 'asyncify' && typeof module.ccall !== 'function') {
+    throw new TypeError('Asyncify calls require the Emscripten ccall helper');
+  }
   if (module._lcb_abi_version() !== schema.abiVersion) {
     throw new Error('The runtime and binding schema have different ABI versions');
   }
@@ -51,6 +55,7 @@ export function attachCore(module, schema) {
     return { info, view: new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength) };
   }
   const api = Object.create(null);
+  const scalarType = kind => ['pointer', 'record', 'u64', 'i64'].includes(kind) ? 'bigint' : 'number';
   for (const fn of schema.functions) {
     if (typeof module[fn.export] !== 'function') throw new Error(`Missing export: ${fn.export}`);
     api[fn.name] = async (...args) => {
@@ -75,7 +80,16 @@ export function attachCore(module, schema) {
         }
       });
       busy = true;
-      try { return await module[fn.export](...args); }
+      try {
+        // A raw Asyncify export returns while Wasm is unwound. ccall owns the
+        // completion Promise; awaiting the raw return would release the guard early.
+        // lcb pointers use uint64_t even on Wasm32, so preserve bigint arguments.
+        return await (suspension === 'asyncify'
+          ? module.ccall(fn.export.slice(1),
+            ['void', 'record'].includes(fn.returnKind) ? null : scalarType(fn.returnKind),
+            kinds.map(scalarType), args, { async: true })
+          : module[fn.export](...args));
+      }
       finally { busy = false; }
     };
   }

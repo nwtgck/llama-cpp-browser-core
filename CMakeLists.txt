@@ -9,7 +9,19 @@ set(LCB_LLAMA_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp" CACHE PATH "
 option(LCB_NATIVE_CHECK "Build a native shared library for boundary tests, not a distribution runtime" OFF)
 option(LCB_MEMORY64 "Use 64-bit WebAssembly memory" OFF)
 option(LCB_WEBGPU "Link the WebGPU backend" OFF)
+option(LCB_JSPI "Suspend WebGPU calls with JSPI" ${LCB_WEBGPU})
+option(LCB_ASYNCIFY "Suspend WebGPU calls with Asyncify" OFF)
 set(LCB_MAXIMUM_MEMORY "4294967296" CACHE STRING "Maximum WebAssembly linear memory in bytes")
+
+if(LCB_JSPI AND LCB_ASYNCIFY)
+    message(FATAL_ERROR "JSPI and Asyncify are mutually exclusive")
+endif()
+if(LCB_WEBGPU AND NOT LCB_JSPI AND NOT LCB_ASYNCIFY)
+    message(FATAL_ERROR "WebGPU requires JSPI or Asyncify")
+endif()
+if(LCB_ASYNCIFY AND (NOT LCB_WEBGPU OR LCB_MEMORY64))
+    message(FATAL_ERROR "The Asyncify profile requires WebGPU and 32-bit memory")
+endif()
 
 if(NOT EXISTS "${LCB_LLAMA_SOURCE}/include/llama.h")
     message(FATAL_ERROR "Missing submodule. Run: git submodule update --init --recursive")
@@ -35,8 +47,16 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
 
 # Flags affecting the ABI must also apply to the outer bridge target.
 if(EMSCRIPTEN)
-    add_compile_options(-msimd128 -fwasm-exceptions)
-    add_link_options(-fwasm-exceptions)
+    add_compile_options(-msimd128)
+    if(LCB_ASYNCIFY)
+        # Asyncify cannot instrument Wasm exception handling in the pinned toolchain.
+        # Use the same JavaScript exception ABI in every library and the bridge.
+        add_compile_options(-fexceptions)
+        add_link_options(-fexceptions)
+    else()
+        add_compile_options(-fwasm-exceptions)
+        add_link_options(-fwasm-exceptions)
+    endif()
     if(LCB_MEMORY64)
         add_compile_options(-sMEMORY64=1)
         add_link_options(-sMEMORY64=1)
@@ -58,9 +78,17 @@ set(GGML_METAL OFF CACHE BOOL "" FORCE)
 set(GGML_CUDA OFF CACHE BOOL "" FORCE)
 set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
 set(GGML_WEBGPU ${LCB_WEBGPU} CACHE BOOL "" FORCE)
-set(GGML_WEBGPU_JSPI ON CACHE BOOL "" FORCE)
+set(GGML_WEBGPU_JSPI ${LCB_JSPI} CACHE BOOL "" FORCE)
 set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
 add_subdirectory("${LCB_LLAMA_SOURCE}" "llama")
+
+if(EMSCRIPTEN AND LCB_ASYNCIFY)
+    # The pinned backend misspells -fexceptions as -exceptions in its link interface.
+    # Correct the integration here without changing the pinned upstream checkout.
+    get_target_property(LCB_WEBGPU_LINK_OPTIONS ggml-webgpu INTERFACE_LINK_OPTIONS)
+    list(REMOVE_ITEM LCB_WEBGPU_LINK_OPTIONS "-exceptions")
+    set_property(TARGET ggml-webgpu PROPERTY INTERFACE_LINK_OPTIONS "${LCB_WEBGPU_LINK_OPTIONS}")
+endif()
 
 if(LCB_NATIVE_CHECK)
     add_library(core SHARED "${LCB_GENERATED}/bindings.cpp")
@@ -81,8 +109,12 @@ else()
         "-sEXPORTED_RUNTIME_METHODS=['HEAPU8','FS','WORKERFS','addFunction','removeFunction','UTF8ToString','stringToUTF8','lengthBytesUTF8','ccall','cwrap']"
         "-sINCOMING_MODULE_JS_API=['locateFile','wasmBinary','wasmMemory','instantiateWasm','print','printErr','onAbort','preRun','postRun','noInitialRun','mainScriptUrlOrBlob']"
         -lworkerfs.js)
-    if(LCB_WEBGPU)
+    if(LCB_JSPI)
         target_link_options(core PRIVATE -sJSPI=1 "-sJSPI_EXPORTS=@${LCB_GENERATED}/jspi-exports.json")
+    elseif(LCB_ASYNCIFY)
+        # Keep indirect-call instrumentation: backend dispatch can suspend through
+        # function pointers. Leave async import discovery to the linked port/runtime.
+        target_link_options(core PRIVATE -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=2097152)
     endif()
 endif()
 target_include_directories(core PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${LCB_LLAMA_SOURCE}"

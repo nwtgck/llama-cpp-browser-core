@@ -67,7 +67,10 @@ sampler. The old borrowed-reference getter is not exported. No reasoning policy 
 generation loop is added by these bindings.
 
 Native chat calls are synchronous and may throw. Raw C calls retain their own
-signatures and JSPI behavior. Applications must sequence all access to one instance,
+signatures and profile-specific suspension behavior. For Asyncify, use
+`ccall(..., { async: true })` to wait for completion; awaiting a raw export does
+not wait for a suspended operation. The example loader configures this automatically.
+Applications must sequence all access to one instance,
 including Embind calls during pending GPU operations. The optional reference
 `core.api` Promise wrapper and its busy guard apply only to calls through that wrapper.
 
@@ -86,7 +89,7 @@ Profiles remain single-threaded. Some upstream audio paths spawn threads, includ
 fixed four-thread Parakeet preprocessing, so `n_threads=1` is not a general remedy.
 Audio generation is experimental upstream. Exposed APIs do not certify model support.
 
-Actions checks three profile builds, standard type generation, package/schema consistency and size limits,
+Actions checks four profile builds, standard type generation, package/schema consistency and size limits,
 then exercises direct generated-module chat primitives and RGB/PCM allocation in
 CPU Chromium. Trained tool-model inference, image/audio mmproj inference, and WebGPU
 inference remain separate validations. Native host smoke covers C bindings only.

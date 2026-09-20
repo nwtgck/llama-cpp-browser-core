@@ -24,15 +24,15 @@ The test, profile-build, and assembly jobs have read permission; only the public
 
 ## Parallel profile builds
 
-Host/publication tests and the three profile builds run independently. Each profile
+Host/publication tests and the four profile builds run independently. Each profile
 has its own runner, checkout, toolchain, and `build/<profile>/` directory. The matrix
-allows up to three concurrent builds and does not cancel the other profiles when
+allows up to four concurrent builds and does not cancel the other profiles when
 one fails, so their diagnostics remain available. Runner availability and repository
 concurrency limits still determine when jobs actually start.
 
 `scripts/stage_ci_build.py` transfers only the runtime directory, four generated API
 files, and provenance for one profile. CMake caches, object files, static libraries,
-and SDK executables are not uploaded. The WebGPU job additionally supplies the
+and SDK executables are not uploaded. The WebGPU JSPI job additionally supplies the
 standalone Emscripten and Dawn notices using the same selection rules as local
 packaging. Each shard has distinct paths; the assembly job merges them under
 `build/`. That job checks out llama.cpp for its notices and browser-test templates,
@@ -51,7 +51,7 @@ increase. Profile build times and queueing determine the actual speedup.
 
 ## Release checks
 
-Publication requires all three profile builds, Chromium tests for the two CPU profiles, and package verification. The workflow compiles WebGPU but does not record GPU inference as verified. CPU smoke tests use a small untrained synthetic GGUF, not a quality benchmark or a multi-GiB model acceptance test.
+Publication requires all four profile builds, Chromium tests for the two CPU profiles, and package verification. The workflow compiles WebGPU but does not record GPU inference as verified. CPU smoke tests use a small untrained synthetic GGUF, not a quality benchmark or a multi-GiB model acceptance test.
 
 Reproducible tests and CI verification logic belong in the source repository. Per-run logs and test-result JSON belong in ignored build output or CI artifacts, not committed documentation. Artifact manifests retain build provenance and the scope of checks actually performed.
 
