@@ -207,7 +207,12 @@ EMSCRIPTEN_BINDINGS(llama_common_chat) {
         return address(common_reasoning_budget_init(pointer<const llama_vocab>(vocab), starts, ends, forced, budget, initial));
     });
     function("common_reasoning_budget_get_state", +[](uint64_t sampler) { return common_reasoning_budget_get_state(pointer<const llama_sampler>(sampler)); });
-    function("common_reasoning_budget_get_end_match", +[](uint64_t sampler) { return common_reasoning_budget_get_end_match(pointer<const llama_sampler>(sampler)); }, return_value_policy::reference());
+    // A const vector pointer cannot use register_vector's mutable class handle.
+    // Copy the short marker so callers own a readable value with normal delete().
+    function("common_reasoning_budget_get_end_match_copy", +[](uint64_t sampler) -> llama_tokens {
+        const auto * match = common_reasoning_budget_get_end_match(pointer<const llama_sampler>(sampler));
+        return match ? *match : llama_tokens{};
+    });
     function("common_reasoning_budget_force", +[](uint64_t sampler) { return common_reasoning_budget_force(pointer<llama_sampler>(sampler)); });
 }
 

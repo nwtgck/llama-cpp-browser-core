@@ -36,7 +36,7 @@ try {
       const { default: createNative } = await import(`/profiles/${profile}/core.mjs`);
       const native = await createNative({ print() {}, printErr() {} });
       const { checkChatSurface } = await import('/chat-surface.mjs');
-      const chatSurface = checkChatSurface(native, chatTemplate);
+      const chatSurface = await checkChatSurface(native, chatTemplate);
       const { createCore, mountReadOnlyFile } = await import('/examples/runtime/index.mjs');
       const core = await createCore({ profile, moduleOptions: { print() {}, printErr() {} } });
       await core.api.llama_backend_init();

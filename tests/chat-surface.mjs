@@ -1,5 +1,5 @@
 /** Real generated-module checks; independent of the example runtime. */
-export function checkChatSurface(native, template) {
+export async function checkChatSurface(native, template) {
   const check = (value, label) => { if (!value) throw new Error(label); };
   const objects = [];
   const own = value => { objects.push(value); return value; };
@@ -85,12 +85,30 @@ export function checkChatSurface(native, template) {
     const end = own(new native.llama_tokens()); end.push_back(2);
     starts.push_back(start); ends.push_back(end);
     const budget = native.common_reasoning_budget_init(0n, starts, ends, end, 4,
-      native.common_reasoning_budget_state.REASONING_BUDGET_COUNTING);
+      native.common_reasoning_budget_state.REASONING_BUDGET_IDLE);
+    let endCopy;
     try {
+      check(Number(own(native.common_reasoning_budget_get_end_match_copy(budget)).size()) === 0, 'Unexpected reasoning end match');
+      await native._lcb_llama_sampler_accept(budget, 1);
+      check(native.common_reasoning_budget_get_state(budget) === native.common_reasoning_budget_state.REASONING_BUDGET_COUNTING, 'Reasoning counting transition failed');
+      await native._lcb_llama_sampler_accept(budget, 2);
+      check(native.common_reasoning_budget_get_state(budget) === native.common_reasoning_budget_state.REASONING_BUDGET_DONE, 'Reasoning completion transition failed');
+      endCopy = own(native.common_reasoning_budget_get_end_match_copy(budget));
+      check(Number(endCopy.size()) === 1 && endCopy.get(0) === 2, 'Reasoning end copy is unreadable');
+      check(Array.from(endCopy).join(',') === '2', 'Reasoning end copy is not iterable');
+      const disposable = native.common_reasoning_budget_get_end_match_copy(budget);
+      disposable.delete();
+      check(native.common_reasoning_budget_get_state(budget) === native.common_reasoning_budget_state.REASONING_BUDGET_DONE, 'Deleting the owned copy changed sampler state');
+      endCopy.set(0, 3);
+      check(own(native.common_reasoning_budget_get_end_match_copy(budget)).get(0) === 2, 'Reasoning end copy aliases sampler state');
+      await native._lcb_llama_sampler_reset(budget);
+      check(Number(own(native.common_reasoning_budget_get_end_match_copy(budget)).size()) === 0, 'Reasoning reset retained the end match');
+      check(endCopy.get(0) === 3, 'Reasoning reset invalidated the owned copy');
+      await native._lcb_llama_sampler_accept(budget, 1);
       check(native.common_reasoning_budget_force(budget), 'Reasoning force failed');
-      check(native.common_reasoning_budget_get_state(budget) === native.common_reasoning_budget_state.REASONING_BUDGET_FORCING, 'Reasoning state transition failed');
-      check(native.common_reasoning_budget_get_end_match(budget) === null, 'Unexpected reasoning end match');
-    } finally { native._lcb_llama_sampler_free(budget); }
+      check(native.common_reasoning_budget_get_state(budget) === native.common_reasoning_budget_state.REASONING_BUDGET_FORCING, 'Reasoning force transition failed');
+    } finally { await native._lcb_llama_sampler_free(budget); }
+    check(endCopy.get(0) === 3, 'Sampler release invalidated the owned copy');
 
     // Bulk data stays in linear memory through the generated C ABI.
     const rgb = native._lcb_malloc(3n);
@@ -98,11 +116,11 @@ export function checkChatSurface(native, template) {
     let bitmap = 0n;
     try {
       native.HEAPU8.set([13, 29, 47], Number(rgb));
-      bitmap = native._lcb_mtmd_bitmap_init(1, 1, rgb);
-      check(bitmap !== 0n && native._lcb_mtmd_bitmap_get_n_bytes(bitmap) === 3n, 'RGB bitmap failed');
-      check(native.HEAPU8[Number(native._lcb_mtmd_bitmap_get_data(bitmap)) + 2] === 47, 'RGB pixels changed');
+      bitmap = await native._lcb_mtmd_bitmap_init(1, 1, rgb);
+      check(bitmap !== 0n && (await native._lcb_mtmd_bitmap_get_n_bytes(bitmap)) === 3n, 'RGB bitmap failed');
+      check(native.HEAPU8[Number(await native._lcb_mtmd_bitmap_get_data(bitmap)) + 2] === 47, 'RGB pixels changed');
     } finally {
-      if (bitmap) native._lcb_mtmd_bitmap_free(bitmap);
+      if (bitmap) await native._lcb_mtmd_bitmap_free(bitmap);
       native._lcb_free(rgb);
     }
     const pcm = native._lcb_malloc(8n);
@@ -111,13 +129,13 @@ export function checkChatSurface(native, template) {
     try {
       const view = new DataView(native.HEAPU8.buffer, Number(pcm), 8);
       view.setFloat32(0, 0.25, true); view.setFloat32(4, -0.5, true);
-      audio = native._lcb_mtmd_bitmap_init_from_audio(2n, pcm);
-      check(audio !== 0n && native._lcb_mtmd_bitmap_is_audio(audio) === 1, 'PCM bitmap failed');
+      audio = await native._lcb_mtmd_bitmap_init_from_audio(2n, pcm);
+      check(audio !== 0n && (await native._lcb_mtmd_bitmap_is_audio(audio)) === 1, 'PCM bitmap failed');
     } finally {
-      if (audio) native._lcb_mtmd_bitmap_free(audio);
+      if (audio) await native._lcb_mtmd_bitmap_free(audio);
       native._lcb_free(pcm);
     }
-    check(native._lcb_mtmd_helper_support_video(0n) === 0, 'Unexpected subprocess video support');
+    check((await native._lcb_mtmd_helper_support_video(0n)) === 0, 'Unexpected subprocess video support');
     return { directGeneratedModule: true, nativeChatToolsAndHistory: true, reusedParser: true,
       nativeEnumsAndDefaults: true, reasoningSampler: true, multimodalBitmaps: true,
       trainedModelTools: false, multimodalModelInference: false };
