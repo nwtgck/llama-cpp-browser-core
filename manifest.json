@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "sourceCommit": "6a57814df4ca94efa76fcc56bbfa6821f857d2c8",
+  "sourceCommit": "9ea6d03f1c7643fa4a4819b26a996be2e24524fc",
   "llamaCommit": "3057bb66c86c46d5781e50e85462a760ba7d1feb",
   "profiles": {
     "cpu-wasm32": {
@@ -12,7 +12,7 @@
         "pthreads": false,
         "maximumMemory": 4294967296
       },
-      "sourceCommit": "6a57814df4ca94efa76fcc56bbfa6821f857d2c8",
+      "sourceCommit": "9ea6d03f1c7643fa4a4819b26a996be2e24524fc",
       "sourceDirty": false,
       "sourceStatusBeforeBuild": [],
       "sourceStatusAfterBuild": [],
@@ -41,7 +41,7 @@
         "-DLCB_WEBGPU=OFF",
         "-DLCB_MAXIMUM_MEMORY=4294967296"
       ],
-      "builtAtUnix": 1789876665,
+      "builtAtUnix": 1789878662,
       "validation": {
         "compiled": true,
         "realModelInference": false,
@@ -74,7 +74,7 @@
         "pthreads": false,
         "maximumMemory": 17179869184
       },
-      "sourceCommit": "6a57814df4ca94efa76fcc56bbfa6821f857d2c8",
+      "sourceCommit": "9ea6d03f1c7643fa4a4819b26a996be2e24524fc",
       "sourceDirty": false,
       "sourceStatusBeforeBuild": [],
       "sourceStatusAfterBuild": [],
@@ -103,7 +103,7 @@
         "-DLCB_WEBGPU=OFF",
         "-DLCB_MAXIMUM_MEMORY=17179869184"
       ],
-      "builtAtUnix": 1789876827,
+      "builtAtUnix": 1789878681,
       "validation": {
         "compiled": true,
         "realModelInference": false,
@@ -136,7 +136,7 @@
         "pthreads": false,
         "maximumMemory": 17179869184
       },
-      "sourceCommit": "6a57814df4ca94efa76fcc56bbfa6821f857d2c8",
+      "sourceCommit": "9ea6d03f1c7643fa4a4819b26a996be2e24524fc",
       "sourceDirty": false,
       "sourceStatusBeforeBuild": [],
       "sourceStatusAfterBuild": [],
@@ -166,7 +166,7 @@
         "-DLCB_MAXIMUM_MEMORY=17179869184",
         "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
       ],
-      "builtAtUnix": 1789876973,
+      "builtAtUnix": 1789878715,
       "validation": {
         "compiled": true,
         "realModelInference": false,
