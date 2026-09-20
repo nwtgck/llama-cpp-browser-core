@@ -111,6 +111,8 @@ jobs:
             --license-root vendor/llama.cpp \
             --license-root build/toolchain-licenses/emscripten \
             --license-root build/toolchain-licenses/emdawnwebgpu_pkg
+      - name: Test Asyncify bigint suspension with real Wasm
+        run: node tests/asyncify-rewind.mjs
       - name: Test real CPU Wasm in Chromium
         run: |
           npm install --prefix .tools/browser --no-save --package-lock=false playwright@1.58.2

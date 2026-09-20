@@ -4,6 +4,12 @@
 
 Source commits pin llama.cpp through a submodule gitlink. Use `git submodule update --init --recursive`; do not advance to a moving upstream tip with `--remote` during a build. The submodule HEAD must match `llamaCommit` in `config/toolchain.json`.
 
+The pinned Emscripten Asyncify runtime needs its existing argument-preservation logic
+enabled for Wasm32 bigint exports as well as Memory64. Toolchain setup changes only
+the four relevant preprocessor guards; input and output SHA-256 pins are recorded
+in `config/toolchain.json` and artifact provenance. Unknown source is rejected,
+repeat setup is safe, and Asyncify builds verify that the selected compiler is patched.
+
 The source commit, llama.cpp commit, and artifact commit are distinct identifiers. The manifest records the first two. The artifact commit is reported after publication through the Actions output and summary; embedding its own hash in the committed manifest would create a circular reference.
 
 ## Runtime package
@@ -52,6 +58,10 @@ increase. Profile build times and queueing determine the actual speedup.
 ## Release checks
 
 Publication requires all four profile builds, Chromium tests for the two CPU profiles, and package verification. The workflow compiles WebGPU but does not record GPU inference as verified. CPU smoke tests use a small untrained synthetic GGUF, not a quality benchmark or a multi-GiB model acceptance test.
+
+An additional real-Wasm Asyncify regression suspends a bigint-argument backend call
+on an asynchronous mock adapter request, then verifies completion after rewind.
+It requires neither a model nor a physical GPU and does not certify GPU inference.
 
 Reproducible tests and CI verification logic belong in the source repository. Per-run logs and test-result JSON belong in ignored build output or CI artifacts, not committed documentation. Artifact manifests retain build provenance and the scope of checks actually performed.
 

@@ -43,6 +43,8 @@ class ProfileConfiguration(unittest.TestCase):
                 with self.subTest(profile=profile), \
                      patch.object(build, 'ROOT', root), \
                      patch.object(build, 'source_status', return_value=[]), \
+                     patch.object(build.shutil, 'which', return_value='/test-toolchain/emcc'), \
+                     patch.object(build, 'verify_asyncify_bigint_patch') as verify_patch, \
                      patch.object(build, 'output', side_effect=[
                          toolchain['llamaCommit'], f'emcc {toolchain["emsdkVersion"]}', 'a' * 40,
                      ]), \
@@ -58,6 +60,10 @@ class ProfileConfiguration(unittest.TestCase):
                                      profiles[profile]['webgpu'])
                     provenance = json.loads((root / 'build' / profile / 'provenance.json').read_text())
                     self.assertEqual(provenance['configuration'], profiles[profile])
+                    if profiles[profile]['asyncify']:
+                        verify_patch.assert_called_once_with(Path('/test-toolchain'), toolchain['emscriptenAsyncifyBigIntPatch'])
+                    else:
+                        verify_patch.assert_not_called()
 
 
 if __name__ == '__main__':

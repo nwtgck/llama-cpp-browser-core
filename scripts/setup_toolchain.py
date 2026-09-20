@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import urllib.request
 import zipfile
+from patch_emscripten import apply_asyncify_bigint_patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -30,6 +31,7 @@ def main():
             raise RuntimeError('emsdk release identity differs from the pinned configuration')
         run('./emsdk','install',cfg['emsdkVersion'],cwd=sdk)
         run('./emsdk','activate',cfg['emsdkVersion'],cwd=sdk)
+        apply_asyncify_bigint_patch(sdk/'upstream/emscripten', cfg['emscriptenAsyncifyBigIntPatch'])
     archive = tools/f'emdawnwebgpu_pkg-{cfg["dawnTag"]}.zip'
     if not archive.exists():
         url = f'https://github.com/google/dawn/releases/download/{cfg["dawnTag"]}/{archive.name}'

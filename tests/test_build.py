@@ -1,4 +1,5 @@
 """Exercise build provenance with real Git/CMake and a simulated compiler probe."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -41,9 +42,12 @@ class BuildProvenance(unittest.TestCase):
         shutil.copy2(ROOT/'config/profiles.json',self.root/'config/profiles.json')
         toolchain=json.loads((ROOT/'config/toolchain.json').read_text())
         toolchain['llamaCommit']=upstream_sha
+        patched_runtime=b'Synthetic patched Asyncify runtime for the compiler fixture.\n'
+        toolchain['emscriptenAsyncifyBigIntPatch']['patchedSha256']=hashlib.sha256(patched_runtime).hexdigest()
         (self.root/'config/toolchain.json').write_text(json.dumps(toolchain))
         (self.root/'scripts').mkdir()
         shutil.copy2(ROOT/'scripts/build.py',self.root/'scripts/build.py')
+        shutil.copy2(ROOT/'scripts/patch_emscripten.py',self.root/'scripts/patch_emscripten.py')
         (self.root/'README.md').write_text('original\n')
         # The real CMake process intentionally runs a probe without WORKING_DIRECTORY,
         # matching the upstream configure-time pattern. No C/C++ or Wasm is compiled.
@@ -75,6 +79,8 @@ class BuildProvenance(unittest.TestCase):
         self.source_sha=self.git(self.root,'rev-parse','HEAD').strip()
         tools=self.work/'tools'
         tools.mkdir()
+        (tools/'src/lib').mkdir(parents=True)
+        (tools/'src/lib/libasync.js').write_bytes(patched_runtime)
         emcc=tools/'emcc'
         emcc.write_text(f'#!{sys.executable}\nprint("emcc (test fixture) {toolchain["emsdkVersion"]}")\n')
         emcc.chmod(0o755)
