@@ -60,10 +60,11 @@ metadata, serialized parsers, and delimiters; retain the fields required by the 
 
 JSON-schema grammar conversion and reasoning-budget sampler primitives are also
 bound. Sampler pointers use the C API's destructor or transfer to a sampler chain.
-`common_reasoning_budget_get_end_match()` is a borrowed reference or null; keep the
-sampler alive and do not delete its token vector or put the returned handle in
-owned-object cleanup. Subsequent sampler mutations can
-invalidate it. No reasoning policy or generation loop is added by these bindings.
+`common_reasoning_budget_get_end_match_copy()` returns an owned token-vector copy,
+empty when no end marker has matched. Call `.delete()` on this copy after use. It
+remains valid after sampler mutation or release; changing it does not alter the
+sampler. The old borrowed-reference getter is not exported. No reasoning policy or
+generation loop is added by these bindings.
 
 Native chat calls are synchronous and may throw. Raw C calls retain their own
 signatures and JSPI behavior. Applications must sequence all access to one instance,

@@ -1739,7 +1739,7 @@ interface EmbindModule {
   json_schema_to_grammar(_0: common_json, _1: boolean): string;
   common_reasoning_budget_init(_0: bigint, _1: llama_token_sequences, _2: llama_token_sequences, _3: llama_tokens, _4: number, _5: common_reasoning_budget_state): bigint;
   common_reasoning_budget_get_state(_0: bigint): common_reasoning_budget_state;
-  common_reasoning_budget_get_end_match(_0: bigint): llama_tokens | null;
+  common_reasoning_budget_get_end_match_copy(_0: bigint): llama_tokens;
   common_reasoning_budget_force(_0: bigint): boolean;
 }
 

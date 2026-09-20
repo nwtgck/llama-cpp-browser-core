@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "sourceCommit": "5b02958d3b35003a43bb122c7fba9ef43dd67bc1",
+  "sourceCommit": "6a57814df4ca94efa76fcc56bbfa6821f857d2c8",
   "llamaCommit": "3057bb66c86c46d5781e50e85462a760ba7d1feb",
   "profiles": {
     "cpu-wasm32": {
@@ -12,7 +12,7 @@
         "pthreads": false,
         "maximumMemory": 4294967296
       },
-      "sourceCommit": "5b02958d3b35003a43bb122c7fba9ef43dd67bc1",
+      "sourceCommit": "6a57814df4ca94efa76fcc56bbfa6821f857d2c8",
       "sourceDirty": false,
       "sourceStatusBeforeBuild": [],
       "sourceStatusAfterBuild": [],
@@ -41,7 +41,7 @@
         "-DLCB_WEBGPU=OFF",
         "-DLCB_MAXIMUM_MEMORY=4294967296"
       ],
-      "builtAtUnix": 1789870899,
+      "builtAtUnix": 1789876665,
       "validation": {
         "compiled": true,
         "realModelInference": false,
@@ -74,7 +74,7 @@
         "pthreads": false,
         "maximumMemory": 17179869184
       },
-      "sourceCommit": "5b02958d3b35003a43bb122c7fba9ef43dd67bc1",
+      "sourceCommit": "6a57814df4ca94efa76fcc56bbfa6821f857d2c8",
       "sourceDirty": false,
       "sourceStatusBeforeBuild": [],
       "sourceStatusAfterBuild": [],
@@ -103,7 +103,7 @@
         "-DLCB_WEBGPU=OFF",
         "-DLCB_MAXIMUM_MEMORY=17179869184"
       ],
-      "builtAtUnix": 1789871082,
+      "builtAtUnix": 1789876827,
       "validation": {
         "compiled": true,
         "realModelInference": false,
@@ -136,7 +136,7 @@
         "pthreads": false,
         "maximumMemory": 17179869184
       },
-      "sourceCommit": "5b02958d3b35003a43bb122c7fba9ef43dd67bc1",
+      "sourceCommit": "6a57814df4ca94efa76fcc56bbfa6821f857d2c8",
       "sourceDirty": false,
       "sourceStatusBeforeBuild": [],
       "sourceStatusAfterBuild": [],
@@ -166,7 +166,7 @@
         "-DLCB_MAXIMUM_MEMORY=17179869184",
         "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
       ],
-      "builtAtUnix": 1789871243,
+      "builtAtUnix": 1789876973,
       "validation": {
         "compiled": true,
         "realModelInference": false,
@@ -212,8 +212,8 @@
     },
     {
       "path": "chat-and-multimodal.md",
-      "bytes": 5635,
-      "sha256": "0e501c5530abaff86b5c18cd2b73cd04d20c54010995ee00b08b4abc23350025"
+      "bytes": 5707,
+      "sha256": "ec6995b3c285d803e0978217242a2aa3de2d042210b16a099a6691d32db13683"
     },
     {
       "path": "examples/runtime/README.md",
@@ -642,8 +642,8 @@
     },
     {
       "path": "profiles/cpu-wasm32/core.d.ts",
-      "bytes": 89198,
-      "sha256": "3f221ecf803b568a5e8efcb80ae08d05c7da1f97959070fc8348a7cad541ba97"
+      "bytes": 89196,
+      "sha256": "00e4a88b361fa7929fa168b6037c10eb6145a46f9b569024b648b99316a70522"
     },
     {
       "path": "profiles/cpu-wasm32/core.mjs",
@@ -652,13 +652,13 @@
     },
     {
       "path": "profiles/cpu-wasm32/core.wasm",
-      "bytes": 6156075,
-      "sha256": "6c07c1dc47610249d123071a8241f46c404b6a03d2e9ffaaea8f7baaeef89d72"
+      "bytes": 6156407,
+      "sha256": "a272d635704ba145a6fbf7f07bb41618086e481326540d18cf2dfc33ada7eeab"
     },
     {
       "path": "profiles/cpu-wasm64/core.d.ts",
-      "bytes": 89198,
-      "sha256": "22ba58698f1b22bc79725bc9f0e71d75ea93f60fcc4c9e01349bfab8d0e4a46b"
+      "bytes": 89196,
+      "sha256": "04848590512b6d69b60b22f5776ce24fe04296da05923519ab517eb6d0948826"
     },
     {
       "path": "profiles/cpu-wasm64/core.mjs",
@@ -667,13 +667,13 @@
     },
     {
       "path": "profiles/cpu-wasm64/core.wasm",
-      "bytes": 6285456,
-      "sha256": "b41b2c62d69205f0e90fd4d7dbadaa0635cd8f0880cea206a713f877a319a999"
+      "bytes": 6285868,
+      "sha256": "bde65bfcf92bdb18da3bc8eb894f302a45d38ab435e14a546387fa7b56a59da9"
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/core.d.ts",
-      "bytes": 97784,
-      "sha256": "b14e1e9aaa65ec1eee36d7da3c8540d84c947610fd64b0da00087139677e8013"
+      "bytes": 97782,
+      "sha256": "e54ed840a4ce934b710ed8175734627fe5f100f7461031555de100fa02881eb5"
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/core.mjs",
@@ -682,8 +682,8 @@
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/core.wasm",
-      "bytes": 8205536,
-      "sha256": "d108ff2a47b9fc9b8a4bcaab559165fc767ecc33eda46c94e379c1d4f625e5fc"
+      "bytes": 8205968,
+      "sha256": "404b128b7ba76208a8ec6d3f5726572d44139ee95051103233577124853ce090"
     }
   ]
 }
