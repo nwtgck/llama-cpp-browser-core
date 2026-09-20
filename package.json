@@ -4,24 +4,24 @@
   "private": true,
   "type": "module",
   "license": "MIT",
+  "main": "./index.mjs",
+  "types": "./index.d.ts",
   "files": [
-    "examples/",
+    "index.mjs",
+    "index.d.ts",
+    "bindings.mjs",
+    "read-only-file.mjs",
     "profiles/",
     "api/",
     "manifest.json",
     "licenses/",
     "README.md",
-    "chat-and-multimodal.md",
     "LICENSE"
   ],
   "exports": {
-    "./examples/runtime": {
-      "types": "./examples/runtime/index.d.ts",
-      "import": "./examples/runtime/index.mjs"
-    },
-    "./profiles/*/core.mjs": {
-      "types": "./profiles/*/core.d.ts",
-      "import": "./profiles/*/core.mjs"
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.mjs"
     },
     "./profiles/*": "./profiles/*",
     "./api/*": "./api/*",
