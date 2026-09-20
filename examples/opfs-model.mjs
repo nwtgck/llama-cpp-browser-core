@@ -1,5 +1,5 @@
 /** Dedicated Worker example; importing this file does not open or download a model. */
-import { createCore, mountReadOnlyFile } from '../dist/package/index.mjs';
+import { createCore, mountReadOnlyFile } from '../dist/package/examples/runtime/index.mjs';
 
 export async function loadStoredModel(fileHandle, { profile = 'cpu-wasm32', baseURL } = {}) {
   const storage = await fileHandle.createSyncAccessHandle();

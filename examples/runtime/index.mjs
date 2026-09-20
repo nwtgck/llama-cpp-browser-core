@@ -1,11 +1,11 @@
-import schema from './api/schema.mjs';
+import schema from '../../api/schema.mjs';
 import { attachCore } from './bindings.mjs';
 export { attachCore } from './bindings.mjs';
 export { mountReadOnlyFile } from './read-only-file.mjs';
 export { schema };
 
 /** No automatic download, model selection, fallback, or Worker creation. */
-export async function createCore({ profile, baseURL = new URL('./profiles/', import.meta.url), moduleOptions = {} } = {}) {
+export async function createCore({ profile, baseURL = new URL('../../profiles/', import.meta.url), moduleOptions = {} } = {}) {
   if (!['cpu-wasm32', 'cpu-wasm64', 'webgpu-wasm64-jspi'].includes(profile)) {
     throw new TypeError('Select an explicit supported build profile');
   }

@@ -2,9 +2,9 @@
 
 ## Boundary
 
-The native core consists of llama.cpp, the selected backends, and mechanically generated bindings. It does not own model catalogs, downloads, storage paths, chat formats, generation loops, UI, or worker protocols.
+The build publishes llama.cpp, selected backends, generated C bindings, and Embind registrations for upstream C++ chat types. It does not own model catalogs, downloads, storage paths, chat sessions, generation loops, UI, or worker protocols. `examples/runtime/` is always shipped as tested reference code for application host implementations. Its use is optional; changing application host code does not require rebuilding Wasm.
 
-The `lcb_` prefix identifies normalized bindings while retaining upstream function names. There is no application-specific JSON command dispatcher. Deprecated and variadic declarations are listed with exclusion reasons in the generated schema. The complete GGML graph-building API and multimodal `mtmd` are outside the current public surface.
+The `lcb_` prefix identifies normalized C bindings while retaining upstream function names. There is no application-specific JSON command dispatcher. Deprecated, variadic, and unsupported video declarations are listed with exclusion reasons in the C schema. The complete GGML graph-building API remains outside the public surface. See [native chat and multimodal bindings](chat-and-multimodal.md) for the separate Embind surface and generated `mtmd` APIs. The conventions below describe the C bindings and optional reference wrapper.
 
 ## Calling convention
 
@@ -29,7 +29,7 @@ core.free(params);
 
 The native core reports structure sizes, alignments, and field offsets. Do not treat a C++ structure as a JavaScript object or reuse offsets from another build. Types and schemas are generated together; a mismatched schema fingerprint is rejected when attaching the core.
 
-Every `core.api` function returns a Promise, including CPU functions. This gives JSPI-enabled WebGPU calls the same interface; it does not move synchronous CPU work to another thread. Overlapping calls into one core are rejected. Applications provide their own sequencing or queues. Calling raw exports bypasses those checks.
+Every reference `core.api` function returns a Promise, including CPU functions. This gives JSPI-enabled WebGPU calls the same interface; it does not move synchronous CPU work to another thread. Overlapping calls through that wrapper are rejected. Applications provide sequencing across all C and Embind calls; direct native calls bypass the reference wrapper's checks.
 
 ## Memory and lifetime
 

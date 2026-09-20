@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attachCore } from '../runtime/bindings.mjs';
+import { attachCore } from '../examples/runtime/bindings.mjs';
 
 function fixture() {
   const schema = { schemaSha256: 'a'.repeat(64), abiVersion: 1, functions: [

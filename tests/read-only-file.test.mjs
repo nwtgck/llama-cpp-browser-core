@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mountReadOnlyFile } from '../runtime/read-only-file.mjs';
+import { mountReadOnlyFile } from '../examples/runtime/read-only-file.mjs';
 
 function fixture(source, options) {
   const parent = { contents: {} }; let node; let last;
