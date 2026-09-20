@@ -83,7 +83,7 @@ The generated model is a small, deterministic, untrained GGUF fixture. Its purpo
 
 Source branches contain the pinned llama.cpp submodule and build tooling. The `artifacts` branch contains only the installable runtime, types, schemas, manifest, and license notices.
 
-GitHub Actions builds on pushes outside `artifacts` and `artifacts/**`. It builds all three profiles, runs Chromium smoke tests for the two CPU profiles, and verifies the package before publishing an append-only artifact commit. Only the publication job has repository write permission. Repository rules must permit that job to update the artifact branch.
+GitHub Actions builds on pushes outside `artifacts` and `artifacts/**`. It runs host tests and builds the three profiles on separate runners. After all succeed, one assembly job runs Chromium smoke tests for the two CPU profiles and verifies the combined package before publishing an append-only artifact commit. Only the publication job has repository write permission. Repository rules must permit that job to update the artifact branch.
 
 The artifact branch tip is the most recently published result, not necessarily a build from `main`. Consumers should pin the complete artifact commit and commit their lockfile. See the [distribution contract](docs/distribution.md).
 

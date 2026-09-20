@@ -11,10 +11,36 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  test:
+    name: Test host and publication code
+    if: github.ref_type == 'branch' && github.ref_name != 'artifacts' && !startsWith(github.ref_name, 'artifacts/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Test host and publication code
+        run: |
+          npm test
+          python3 -m unittest discover -s tests -p 'test_*.py'
+  compile:
+    name: Build ${{ matrix.profile }}
     if: github.ref_type == 'branch' && github.ref_name != 'artifacts' && !startsWith(github.ref_name, 'artifacts/')
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        profile:
+          - cpu-wasm32
+          - cpu-wasm64
+          - webgpu-wasm64-jspi
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,21 +51,65 @@ jobs:
           node-version: '22.16.0'
       - name: Install build prerequisites
         run: sudo apt-get update && sudo apt-get install -y ninja-build clang cmake
-      - name: Test host and publication code
-        run: |
-          npm test
-          python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Install pinned toolchain
         run: python3 scripts/setup_toolchain.py
-      - name: Build all profiles
+      - name: Build profile
         shell: bash
+        env:
+          PROFILE: ${{ matrix.profile }}
         run: |
           source .tools/emsdk/emsdk_env.sh
-          python3 scripts/build.py --profile cpu-wasm32
-          python3 scripts/build.py --profile cpu-wasm64
-          python3 scripts/build.py --profile webgpu-wasm64-jspi
+          python3 scripts/build.py --profile "$PROFILE"
+      - name: Stage package inputs
+        shell: bash
+        env:
+          PROFILE: ${{ matrix.profile }}
+        run: |
+          extra=()
+          if [[ "$PROFILE" == "webgpu-wasm64-jspi" ]]; then
+            extra+=(--include-toolchain-notices)
+          fi
+          python3 scripts/stage_ci_build.py --profile "$PROFILE" "${extra[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: profile-build-${{ matrix.profile }}
+          path: build/ci-upload/
+          if-no-files-found: error
+          # The staging script copies runtime/API/provenance and license files only.
+          include-hidden-files: true
+          compression-level: 1
+          retention-days: 14
+      - name: Report source changes after a failure
+        if: failure()
+        run: |
+          git status --short --untracked-files=all --ignore-submodules=none
+          git diff --stat
+          git diff --cached --stat
+          git submodule foreach --recursive 'git status --short --untracked-files=all --ignore-submodules=none'
+  build:
+    needs: [test, compile]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: profile-build-*
+          path: build/
+          # Each shard owns a distinct profile directory. Only WebGPU supplies notices.
+          merge-multiple: true
       - name: Assemble runtime-only package
-        run: python3 scripts/package_runtime.py
+        run: |
+          python3 scripts/package_runtime.py \
+            --license-root vendor/llama.cpp \
+            --license-root build/toolchain-licenses/emscripten \
+            --license-root build/toolchain-licenses/emdawnwebgpu_pkg
       - name: Test real CPU Wasm in Chromium
         run: |
           npm install --prefix .tools/browser --no-save --package-lock=false playwright@1.58.2
@@ -49,13 +119,17 @@ jobs:
       - name: Record verified scope and repackage
         run: |
           python3 scripts/record_browser_validation.py
-          python3 scripts/package_runtime.py
+          python3 scripts/package_runtime.py \
+            --license-root vendor/llama.cpp \
+            --license-root build/toolchain-licenses/emscripten \
+            --license-root build/toolchain-licenses/emdawnwebgpu_pkg
           python3 scripts/package_runtime.py --verify-only
       - uses: actions/upload-artifact@v4
         with:
           name: runtime-package
           path: dist/package/
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 14
       - name: Report source changes after a failure
         if: failure()

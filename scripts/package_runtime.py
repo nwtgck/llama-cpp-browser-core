@@ -34,6 +34,19 @@ def copy_embedded_notices(source: Path, destination: Path):
         shutil.copy2(original,target)
 
 
+def copy_license_notices(source: Path, destination: Path):
+    """Copy the same standalone notices for local packaging and CI transfer."""
+    if not source.exists(): raise ValueError(f'Missing license source: {source}')
+    copied=0
+    for path in sorted(source.rglob('*')):
+        if not path.is_file() or path.is_symlink() or '.git' in path.parts: continue
+        if path.name.upper().startswith(('LICENSE','COPYING','COPYRIGHT')):
+            target=destination/path.relative_to(source)
+            target.parent.mkdir(parents=True,exist_ok=True)
+            shutil.copy2(path,target); copied+=1
+    return copied
+
+
 def sha(path):
     with path.open('rb') as f: return hashlib.file_digest(f,'sha256').hexdigest()
 
@@ -108,12 +121,7 @@ def build_package(build_root: Path, destination: Path, profiles: list[str], *, l
         licenses=out/'licenses'; licenses.mkdir()
         copied=0
         for i,root in enumerate(license_roots):
-            if not root.exists(): raise ValueError(f'Missing license source: {root}')
-            for p in sorted(root.rglob('*')):
-                if not p.is_file() or p.is_symlink() or '.git' in p.parts: continue
-                if p.name.upper().startswith(('LICENSE','COPYING','COPYRIGHT')):
-                    target=licenses/str(i)/p.relative_to(root)
-                    target.parent.mkdir(parents=True,exist_ok=True); shutil.copy2(p,target); copied+=1
+            copied+=copy_license_notices(root,licenses/str(i))
         if not copied: raise ValueError('No third-party license notices collected')
         copy_embedded_notices(ROOT/'vendor/llama.cpp', licenses/'embedded')
         pkg={'name':RUNTIME_NAME,'version':'0.1.0','private':True,'type':'module','license':'MIT',

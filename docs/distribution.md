@@ -20,7 +20,34 @@ The first artifact commit has no parent. Later commits use the previous artifact
 
 When concurrent builds race, the losing publisher fetches the new tip and recreates its candidate commit on that parent. Existing commits and hashes remain intact. After 20 failed attempts, the job fails and can be rerun. A concurrency configuration that cancels earlier pending builds is deliberately not used.
 
-The build job has read permission; only the publication job has write permission. Credentials are supplied through a process-local HTTP header rather than stored in the remote URL. Anyone who can push a source branch can change the resulting artifact; the workflow does not grant publication credentials to untrusted external pull requests.
+The test, profile-build, and assembly jobs have read permission; only the publication job has write permission. Credentials are supplied through a process-local HTTP header rather than stored in the remote URL. Anyone who can push a source branch can change the resulting artifact; the workflow does not grant publication credentials to untrusted external pull requests.
+
+## Parallel profile builds
+
+Host/publication tests and the three profile builds run independently. Each profile
+has its own runner, checkout, toolchain, and `build/<profile>/` directory. The matrix
+allows up to three concurrent builds and does not cancel the other profiles when
+one fails, so their diagnostics remain available. Runner availability and repository
+concurrency limits still determine when jobs actually start.
+
+`scripts/stage_ci_build.py` transfers only the runtime directory, four generated API
+files, and provenance for one profile. CMake caches, object files, static libraries,
+and SDK executables are not uploaded. The WebGPU job additionally supplies the
+standalone Emscripten and Dawn notices using the same selection rules as local
+packaging. Each shard has distinct paths; the assembly job merges them under
+`build/`. That job checks out llama.cpp for its notices and browser-test templates,
+but does not install Emscripten or compile the core again.
+
+The existing `build` job remains the aggregate success check. Assembly requires
+the host tests and every matrix build to succeed. It then uses
+the existing packager, CPU Chromium tests (including the chat/tool surface),
+validation recorder, and final package checks. No partial profile set is published.
+Only the resulting `runtime-package` is passed to the single publication job.
+The local, sequential build commands remain supported.
+
+Parallel runners reduce elapsed time rather than the total amount of compilation.
+They also repeat setup work and add artifact transfers; total runner usage can
+increase. Profile build times and queueing determine the actual speedup.
 
 ## Release checks
 
