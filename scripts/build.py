@@ -6,9 +6,11 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import time
+from patch_emscripten import verify_asyncify_bigint_patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -38,12 +40,18 @@ def main():
     version=output('emcc','--version').splitlines()[0]
     if not re.search(r'(?<!\d)'+re.escape(toolchain['emsdkVersion'])+r'(?!\d)',version):
         p.error(f'Expected Emscripten {toolchain["emsdkVersion"]}; found {version}')
+    if cfg['asyncify']:
+        compiler = shutil.which('emcc')
+        if compiler is None: p.error('Cannot locate emcc to verify its Asyncify runtime')
+        verify_asyncify_bigint_patch(Path(compiler).resolve().parent, toolchain['emscriptenAsyncifyBigIntPatch'])
     source_commit=output('git','rev-parse','HEAD')
     status_before=source_status(ROOT)
     build=ROOT/'build'/a.profile
     command=['emcmake','cmake','-S',str(ROOT),'-B',str(build),'-G','Ninja',
              '-DCMAKE_BUILD_TYPE=Release', '-DLCB_MEMORY64='+('ON' if cfg['memory64'] else 'OFF'),
              '-DLCB_WEBGPU='+('ON' if cfg['webgpu'] else 'OFF'),
+             '-DLCB_JSPI='+('ON' if cfg['jspi'] else 'OFF'),
+             '-DLCB_ASYNCIFY='+('ON' if cfg['asyncify'] else 'OFF'),
              '-DLCB_MAXIMUM_MEMORY='+str(cfg['maximumMemory'])]
     if cfg['webgpu']:
         dawn=ROOT/'.tools/emdawnwebgpu_pkg'

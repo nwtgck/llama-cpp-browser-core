@@ -1,5 +1,5 @@
 import type { LowLevelFunctions } from '../../api/functions.js';
-export type Profile = 'cpu-wasm32' | 'cpu-wasm64' | 'webgpu-wasm64-jspi';
+export type Profile = 'cpu-wasm32' | 'cpu-wasm64' | 'webgpu-wasm32-asyncify' | 'webgpu-wasm64-jspi';
 export interface CoreModule {
   HEAPU8: Uint8Array;
   FS: any;
@@ -31,7 +31,7 @@ export function createCore(options: {
   baseURL?: URL | string;
   moduleOptions?: Record<string, unknown>;
 }): Promise<Core>;
-export function attachCore(module: CoreModule, schema: any): Core;
+export function attachCore(module: CoreModule, schema: any, options?: { suspension?: 'direct' | 'asyncify' }): Core;
 export function mountReadOnlyFile(core: Core, path: string, source: {
   size: number;
   read(destination: Uint8Array, offset: number): number;

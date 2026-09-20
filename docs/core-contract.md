@@ -29,7 +29,16 @@ core.free(params);
 
 The native core reports structure sizes, alignments, and field offsets. Do not treat a C++ structure as a JavaScript object or reuse offsets from another build. Types and schemas are generated together; a mismatched schema fingerprint is rejected when attaching the core.
 
-Every reference `core.api` function returns a Promise, including CPU functions. This gives JSPI-enabled WebGPU calls the same interface; it does not move synchronous CPU work to another thread. Overlapping calls through that wrapper are rejected. Applications provide sequencing across all C and Embind calls; direct native calls bypass the reference wrapper's checks.
+Every reference `core.api` function returns a Promise, including CPU functions. This gives JSPI and Asyncify WebGPU calls the same interface; it does not move synchronous CPU work to another thread. Overlapping calls through that wrapper are rejected. Applications provide sequencing across all C and Embind calls; direct native calls bypass the reference wrapper's checks.
+
+With `webgpu-wasm32-asyncify`, the reference loader uses Emscripten's
+`ccall(name, returnType, argumentTypes, arguments, { async: true })`. Raw Asyncify
+exports can return before a GPU operation finishes; merely awaiting that return
+is insufficient. When attaching a module yourself, pass
+`attachCore(module, schema, { suspension: 'asyncify' })`. Normalized `lcb_` pointer,
+record, and 64-bit arguments remain `bigint` even with 32-bit Wasm memory. Raw
+upstream exports instead retain their native ABI. Synchronous layout/allocation
+helpers and Embind chat operations do not require suspension wrappers.
 
 ## Memory and lifetime
 

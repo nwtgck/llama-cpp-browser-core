@@ -85,6 +85,54 @@ test('missing exports and ABI mismatch fail on attachment', () => {
   assert.throws(() => attachCore(module, schema), /ABI versions/);
 });
 
+test('Asyncify retains the guard until ccall completes and preserves normalized bigint values', async () => {
+  const { module, schema } = fixture();
+  let finish;
+  module._lcb_pointer_bytes = () => 4;
+  module._lcb_llama_echo = () => { throw Error('Raw exports cannot represent Asyncify completion'); };
+  module.ccall = (name, returnType, argTypes, args, options) => {
+    assert.equal(name, 'lcb_llama_echo');
+    assert.equal(returnType, 'bigint');
+    assert.deepEqual(argTypes, ['bigint']);
+    assert.deepEqual(args, [20n]);
+    assert.deepEqual(options, { async: true });
+    return new Promise(resolve => { finish = resolve; });
+  };
+  const core = attachCore(module, schema, { suspension: 'asyncify' });
+  const pending = core.api.llama_echo(20n);
+  assert.equal(core.busy, true);
+  await assert.rejects(core.api.llama_echo(20n), /serialize/);
+  assert.throws(() => core.free(64n), /serialize/);
+  finish(23n);
+  assert.equal(await pending, 23n);
+  assert.equal(core.busy, false);
+});
+
+test('Asyncify uses return storage for records and releases the guard after failure', async () => {
+  const { module, schema } = fixture();
+  const recordSchema = { ...schema, functions: [
+    { name: 'llama_record', export: '_lcb_llama_record', parameters: [{ kind: 'unsigned' }], returnKind: 'record' },
+  ] };
+  module._lcb_llama_record = () => {};
+  module.ccall = (name, returnType, argTypes, args, options) => {
+    assert.equal(name, 'lcb_llama_record');
+    assert.equal(returnType, null);
+    assert.deepEqual(argTypes, ['bigint', 'number']);
+    assert.deepEqual(args, [64n, 7]);
+    assert.deepEqual(options, { async: true });
+    return Promise.reject(new Error('Native operation failed'));
+  };
+  const core = attachCore(module, recordSchema, { suspension: 'asyncify' });
+  await assert.rejects(core.api.llama_record(64n, 7), /Native operation failed/);
+  assert.equal(core.busy, false);
+});
+
+test('Asyncify attachment requires its completion helper', () => {
+  const { module, schema } = fixture();
+  assert.throws(() => attachCore(module, schema, { suspension: 'asyncify' }), /ccall/);
+  assert.throws(() => attachCore(module, schema, { suspension: 'unknown' }), /suspension/);
+});
+
 test('a schema from a different build is rejected', () => {
   const { module, schema } = fixture();
   assert.throws(() => attachCore(module, { ...schema, schemaSha256: 'b'.repeat(64) }), /do not match/);
