@@ -48,7 +48,7 @@
         "-DLCB_ASYNCIFY=OFF",
         "-DLCB_MAXIMUM_MEMORY=4294967296"
       ],
-      "builtAtUnix": 1789968445,
+      "builtAtUnix": 1789970216,
       "validation": {
         "compiled": true,
         "realModelInference": false,
@@ -117,7 +117,7 @@
         "-DLCB_ASYNCIFY=OFF",
         "-DLCB_MAXIMUM_MEMORY=17179869184"
       ],
-      "builtAtUnix": 1789968382,
+      "builtAtUnix": 1789970260,
       "validation": {
         "compiled": true,
         "realModelInference": false,
@@ -187,7 +187,7 @@
         "-DLCB_MAXIMUM_MEMORY=4294967296",
         "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
       ],
-      "builtAtUnix": 1789968531,
+      "builtAtUnix": 1789970319,
       "validation": {
         "compiled": true,
         "realModelInference": false,
@@ -240,7 +240,7 @@
         "-DLCB_MAXIMUM_MEMORY=4294967296",
         "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
       ],
-      "builtAtUnix": 1789968417,
+      "builtAtUnix": 1789970234,
       "validation": {
         "compiled": true,
         "realModelInference": false,
@@ -293,7 +293,7 @@
         "-DLCB_MAXIMUM_MEMORY=17179869184",
         "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
       ],
-      "builtAtUnix": 1789968642,
+      "builtAtUnix": 1789970413,
       "validation": {
         "compiled": true,
         "realModelInference": false,
