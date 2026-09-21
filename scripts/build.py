@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build one runtime profile without committing generated artifacts."""
+"""Build one profile/variant pair without committing generated artifacts."""
 from __future__ import annotations
 import argparse
 import json
@@ -25,8 +25,10 @@ def source_status(directory: Path) -> list[str]:
 
 def main():
     profiles=json.loads((ROOT/'config/profiles.json').read_text())
+    variants=json.loads((ROOT/'config/variants.json').read_text())
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--profile', choices=list(profiles), required=True)
+    p.add_argument('--variant', choices=list(variants), required=True)
     p.add_argument('--jobs',type=int,default=min(os.cpu_count() or 2, 8))
     a=p.parse_args(); cfg=profiles[a.profile]
     toolchain=json.loads((ROOT/'config/toolchain.json').read_text())
@@ -46,9 +48,12 @@ def main():
         verify_asyncify_bigint_patch(Path(compiler).resolve().parent, toolchain['emscriptenAsyncifyBigIntPatch'])
     source_commit=output('git','rev-parse','HEAD')
     status_before=source_status(ROOT)
-    build=ROOT/'build'/a.profile
+    # Assertions affect linked Wasm as well as JavaScript. Each variant owns a
+    # separate build tree; never reuse another variant's generated runtime files.
+    build=ROOT/'build'/a.profile/a.variant
     command=['emcmake','cmake','-S',str(ROOT),'-B',str(build),'-G','Ninja',
-             '-DCMAKE_BUILD_TYPE=Release', '-DLCB_MEMORY64='+('ON' if cfg['memory64'] else 'OFF'),
+             '-DCMAKE_BUILD_TYPE=Release', '-DLCB_VARIANT='+a.variant,
+             '-DLCB_MEMORY64='+('ON' if cfg['memory64'] else 'OFF'),
              '-DLCB_WEBGPU='+('ON' if cfg['webgpu'] else 'OFF'),
              '-DLCB_JSPI='+('ON' if cfg['jspi'] else 'OFF'),
              '-DLCB_ASYNCIFY='+('ON' if cfg['asyncify'] else 'OFF'),
@@ -67,7 +72,8 @@ def main():
         print('Source changes detected; this build cannot be published:\n'+json.dumps({
             'beforeBuild':status_before,'afterBuild':status_after,
         },indent=2),file=sys.stderr)
-    provenance={'profile':a.profile,'configuration':cfg,'sourceCommit':source_commit,
+    provenance={'profile':a.profile,'variant':a.variant,'configuration':cfg,
+                'variantConfiguration':variants[a.variant],'sourceCommit':source_commit,
                 'sourceDirty': bool(status_before or status_after),
                 'sourceStatusBeforeBuild':status_before,'sourceStatusAfterBuild':status_after,
                 'llamaCommit':sha,'toolchain':toolchain,'emccVersion':version,

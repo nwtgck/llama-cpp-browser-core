@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const profileRoot = resolve(process.argv[2] || 'dist/package/profiles/webgpu-wasm32-asyncify');
+const profileRoot = resolve(process.argv[2] || 'dist/package/profiles/webgpu-wasm32-asyncify/test');
 let adapterRequests = 0;
 Object.defineProperty(globalThis, 'navigator', {
   configurable: true,

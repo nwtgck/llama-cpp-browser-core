@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts'))
-from package_runtime import build_package, validate
+from package_runtime import VARIANTS, build_package, validate
 from publish_artifacts import publish
 import publish_artifacts
 
@@ -21,17 +21,20 @@ def git(*args,cwd=None):
 class Distribution(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory(prefix='lcb-test-')
-        self.root=Path(self.tmp.name); build=self.root/'build/cpu-wasm32'
-        (build/'runtime').mkdir(parents=True); (build/'generated').mkdir()
-        (build/'runtime/core.wasm').write_bytes(b'\0asm\1\0\0\0')
-        (build/'runtime/core.mjs').write_text('export default async () => ({ fixture: true });\n')
-        (build/'runtime/core.d.ts').write_text('export default function create(): Promise<{ fixture: boolean }>;\n')
-        for name,content in {'schema.json':'{}','schema.mjs':'export default {};',
-                             'functions.d.ts':'export interface LowLevelFunctions {}', 'exports.json':'[]'}.items():
-            (build/'generated'/name).write_text(content)
+        self.root=Path(self.tmp.name)
         self.provenance={'profile':'cpu-wasm32','sourceCommit':'a'*40,'llamaCommit':'b'*40,'sourceDirty':False,
                          'validation':{'fixtureOnly':True}}
-        (build/'provenance.json').write_text(json.dumps(self.provenance))
+        for variant,settings in VARIANTS.items():
+            build=self.root/'build/cpu-wasm32'/variant
+            (build/'runtime').mkdir(parents=True); (build/'generated').mkdir()
+            (build/'runtime/core.wasm').write_bytes(b'\0asm\1\0\0\0')
+            (build/'runtime/core.mjs').write_text(f'export default async () => ({{ fixture: true, variant: {json.dumps(variant)} }});\n')
+            (build/'runtime/core.d.ts').write_text('export default function create(): Promise<{ fixture: boolean }>;\n')
+            for name,content in {'schema.json':'{}','schema.mjs':'export default {};',
+                                 'functions.d.ts':'export interface LowLevelFunctions {}', 'exports.json':'[]'}.items():
+                (build/'generated'/name).write_text(content)
+            data={**self.provenance,'variant':variant,'variantConfiguration':settings}
+            (build/'provenance.json').write_text(json.dumps(data))
         licenses=self.root/'notices'; licenses.mkdir(); (licenses/'LICENSE').write_text('Test-only notice')
         self.licenses=licenses; self.package=self.root/'package'
         self.assemble()
@@ -46,8 +49,39 @@ class Distribution(unittest.TestCase):
         self.assertNotIn('devDependencies',package)
         self.assertFalse((self.package/'.gitmodules').exists())
     def test_payload_tampering_is_rejected(self):
-        (self.package/'profiles/cpu-wasm32/core.wasm').write_bytes(b'bad')
+        (self.package/'profiles/cpu-wasm32/browser/core.wasm').write_bytes(b'bad')
         with self.assertRaises(ValueError): validate(self.package)
+    def test_both_variant_exports_resolve_their_own_runtime_pair(self):
+        # Package self-references exercise the same wildcard exports as consumers,
+        # without installing dependencies or running generated Wasm.
+        code='''\
+import assert from 'node:assert/strict';
+for (const variant of ['browser', 'test']) {
+  const entry = `llama-cpp-browser-core/profiles/cpu-wasm32/${variant}/core.mjs`;
+  const { default: create } = await import(entry);
+  assert.equal((await create()).fixture, true);
+  assert.equal((await create()).variant, variant);
+  const wasm = import.meta.resolve(`llama-cpp-browser-core/profiles/cpu-wasm32/${variant}/core.wasm`);
+  assert.equal(new URL('core.wasm', import.meta.resolve(entry)).href, wasm);
+}
+'''
+        subprocess.run(['node','--input-type=module','-e',code],cwd=self.package,check=True)
+    def test_missing_variant_or_variant_provenance_is_rejected(self):
+        path=self.package/'manifest.json'; original=path.read_text()
+        for change in ('missing','mislabelled','configuration'):
+            manifest=json.loads(original)
+            variants=manifest['profiles']['cpu-wasm32']['variants']
+            if change=='missing': del variants['test']
+            elif change=='mislabelled': variants['browser']['variant']='test'
+            else: variants['browser']['variantConfiguration']=VARIANTS['test']
+            path.write_text(json.dumps(manifest))
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError,'[Vv]ariant'):
+                validate(self.package)
+        path.write_text(original)
+    def test_assembly_requires_the_complete_test_variant_pair(self):
+        (self.root/'build/cpu-wasm32/test/runtime/core.wasm').unlink()
+        with self.assertRaisesRegex(ValueError,'Missing cpu-wasm32/test runtime'):
+            self.assemble()
     def test_embedded_upstream_notices_are_preserved_verbatim(self):
         # These libraries carry notices inside source, not standalone LICENSE files.
         for relative in ('vendor/miniaudio/miniaudio.h', 'vendor/stb/stb_image.h',
@@ -87,11 +121,11 @@ class Distribution(unittest.TestCase):
         (self.package/'unlisted').write_text('stale asset')
         with self.assertRaises(ValueError): validate(self.package)
     def test_dirty_source_cannot_be_published(self):
-        path=self.root/'build/cpu-wasm32/provenance.json'
+        path=self.root/'build/cpu-wasm32/browser/provenance.json'
         value=json.loads(path.read_text()); value['sourceDirty']=True; path.write_text(json.dumps(value)); self.assemble()
         with self.assertRaises(ValueError): validate(self.package)
     def test_dirty_source_error_identifies_profile_and_changed_paths(self):
-        path=self.root/'build/cpu-wasm32/provenance.json'
+        path=self.root/'build/cpu-wasm32/browser/provenance.json'
         value=json.loads(path.read_text())
         value.update({'sourceDirty':True,'sourceStatusBeforeBuild':[],
                       'sourceStatusAfterBuild':['?? configure-probe.tmp']})
@@ -107,28 +141,47 @@ class Distribution(unittest.TestCase):
         script.parent.mkdir()
         shutil.copy2(ROOT/'scripts/record_browser_validation.py',script)
         results=[]
-        for profile in ('cpu-wasm32','cpu-wasm64'):
-            path=self.root/'build'/profile/'provenance.json'
-            path.parent.mkdir(parents=True,exist_ok=True)
-            value={**self.provenance,'profile':profile,'sourceDirty':True,
-                   'sourceStatusBeforeBuild':[' M README.md'],'sourceStatusAfterBuild':[]}
-            path.write_text(json.dumps(value))
-            results.append({'profile':profile,'passed':True,'syntheticModel':True})
+        for profile in ('cpu-wasm32','cpu-wasm64','webgpu-wasm32-jspi','webgpu-wasm64-jspi','webgpu-wasm32-asyncify'):
+            for variant,settings in VARIANTS.items():
+                path=self.root/'build'/profile/variant/'provenance.json'
+                path.parent.mkdir(parents=True,exist_ok=True)
+                value={**self.provenance,'profile':profile,'variant':variant,'variantConfiguration':settings,
+                       'sourceDirty':True,'sourceStatusBeforeBuild':[' M README.md'],'sourceStatusAfterBuild':[]}
+                path.write_text(json.dumps(value))
+                results.append({'profile':profile,'variant':variant,'passed':True,
+                                'syntheticModel':profile.startswith('cpu-')})
         (self.root/'build/browser-results.json').write_text(json.dumps(results))
         subprocess.run([sys.executable,str(script)],check=True,capture_output=True,text=True)
         for result in results:
-            value=json.loads((self.root/'build'/result['profile']/'provenance.json').read_text())
+            value=json.loads((self.root/'build'/result['profile']/result['variant']/'provenance.json').read_text())
             self.assertTrue(value['sourceDirty'])
             self.assertTrue(value['validation']['browserSmoke'])
             self.assertEqual(value['sourceStatusBeforeBuild'],[' M README.md'])
+            scope='syntheticUntrainedModel' if result['syntheticModel'] else 'mockedAdapterSuspension'
+            self.assertEqual(value['validation'][scope],result)
         self.assemble()
         with self.assertRaises(ValueError): validate(self.package)
+
+    def test_browser_validation_rejects_results_without_the_test_variant(self):
+        script=self.root/'scripts/record_browser_validation.py'
+        script.parent.mkdir()
+        shutil.copy2(ROOT/'scripts/record_browser_validation.py',script)
+        results=[{'profile':profile,'variant':'browser','passed':True}
+                 for profile in ('cpu-wasm32','cpu-wasm64','webgpu-wasm32-jspi',
+                                 'webgpu-wasm64-jspi','webgpu-wasm32-asyncify')]
+        (self.root/'build/browser-results.json').write_text(json.dumps(results))
+        result=subprocess.run([sys.executable,str(script)],capture_output=True,text=True)
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('Missing or failed profile/variant browser smoke tests',result.stderr)
+        for variant in VARIANTS:
+            value=json.loads((self.root/'build/cpu-wasm32'/variant/'provenance.json').read_text())
+            self.assertNotIn('browserSmoke',value['validation'])
 
     def test_append_only_publication_preserves_old_sha_and_npm_install(self):
         remote=self.root/'remote.git'; git('init','--bare','--quiet',str(remote))
         first=publish(self.package,str(remote))
         # Change a payload and remove an old auxiliary asset by repackaging from scratch.
-        (self.root/'build/cpu-wasm32/runtime/core.mjs').write_text('export default async () => ({ fixture: 2 });\n')
+        (self.root/'build/cpu-wasm32/browser/runtime/core.mjs').write_text('export default async () => ({ fixture: 2 });\n')
         self.assemble()
         second=publish(self.package,str(remote))
         self.assertNotEqual(first,second)
@@ -149,7 +202,7 @@ class Distribution(unittest.TestCase):
         (install/'package.json').write_text('{"private":true}')
         command=['npm','install','--no-audit','--no-fund',f'git+file://{remote}#{first}']
         subprocess.run(command,cwd=install,check=True,capture_output=True,text=True)
-        copied=install/'node_modules/llama-cpp-browser-core/profiles/cpu-wasm32/core.mjs'
+        copied=install/'node_modules/llama-cpp-browser-core/profiles/cpu-wasm32/browser/core.mjs'
         self.assertIn('fixture: true',copied.read_text())
         shutil.rmtree(install/'node_modules')
         subprocess.run(['npm','ci','--no-audit','--no-fund','--cache',str(self.root/'empty-cache')],

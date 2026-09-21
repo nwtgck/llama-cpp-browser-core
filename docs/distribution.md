@@ -16,7 +16,7 @@ The source commit, llama.cpp commit, and artifact commit are distinct identifier
 
 The artifact root gets a separate `package.json`, not a copy of the development manifest. It has no build scripts, workspaces, dependencies, submodules, or build intermediates. `private: true` prevents accidental npm registry publication without changing the Git-based distribution model.
 
-Each profile's runtime directory is copied as a unit. Do not assume every build produces exactly two files. Types, schemas, host helpers, a manifest, and license notices accompany the runtime. The manifest covers every other file's path, size, and SHA-256; unexpected files are rejected. `npm pack` output is checked against the actual package tree.
+Each profile/variant runtime directory is copied as a unit to `profiles/<profile>/<variant>/`. `browser` disables Emscripten assertions and targets `web,worker`; `test` enables assertions and targets `web,worker,node`. Both are always included. Assertions can affect linked Wasm, so variants use independent build directories and their JavaScript/Wasm files must never be mixed. Do not assume every build produces exactly two files. Types, schemas, host helpers, a manifest, and license notices accompany the runtime. Manifest format 2 records separate provenance and validation under `profiles[profile].variants[variant]`. It covers every other file's path, size, and SHA-256; unexpected files are rejected. `npm pack` output is checked against the actual package tree.
 
 Mixing source commits, upstream commits, or binding schemas across profiles is rejected. Dirty source builds cannot be published. A single file of 100 MiB or more is rejected before pushing. Exceeding that guard requires an explicit distribution change, not a silent conversion to Git LFS pointers.
 
@@ -30,15 +30,15 @@ The test, profile-build, and assembly jobs have read permission; only the public
 
 ## Parallel profile builds
 
-Host/publication tests and the four profile builds run independently. Each profile
-has its own runner, checkout, toolchain, and `build/<profile>/` directory. The matrix
+Host/publication tests and the ten profile/variant builds run independently. Each pair
+has its own runner, checkout, toolchain, and `build/<profile>/<variant>/` directory. The matrix
 allows up to four concurrent builds and does not cancel the other profiles when
 one fails, so their diagnostics remain available. Runner availability and repository
 concurrency limits still determine when jobs actually start.
 
 `scripts/stage_ci_build.py` transfers only the runtime directory, four generated API
-files, and provenance for one profile. CMake caches, object files, static libraries,
-and SDK executables are not uploaded. The WebGPU JSPI job additionally supplies the
+files, and provenance for one profile/variant pair. CMake caches, object files, static libraries,
+and SDK executables are not uploaded. The wasm64 WebGPU JSPI/browser job additionally supplies the
 standalone Emscripten and Dawn notices using the same selection rules as local
 packaging. Each shard has distinct paths; the assembly job merges them under
 `build/`. That job checks out llama.cpp for its notices and browser-test templates,
@@ -57,9 +57,9 @@ increase. Profile build times and queueing determine the actual speedup.
 
 ## Release checks
 
-Publication requires all four profile builds, Chromium tests for the two CPU profiles, and package verification. The workflow compiles WebGPU but does not record GPU inference as verified. CPU smoke tests use a small untrained synthetic GGUF, not a quality benchmark or a multi-GiB model acceptance test.
+Publication requires all five profiles in both variants, Chromium checks, and package verification. Chromium tests exercise both variants of the two CPU profiles and all three WebGPU profiles with JSPI/Asyncify suspension. Testing the assertions-enabled variant alone does not validate the browser variant; production files are exercised directly. The workflow compiles WebGPU but does not record GPU inference as verified. CPU smoke tests use a small untrained synthetic GGUF, not a quality benchmark or a multi-GiB model acceptance test.
 
-An additional real-Wasm Asyncify regression suspends a bigint-argument backend call
+An additional Node.js real-Wasm Asyncify regression uses the test variant and suspends a bigint-argument backend call
 on an asynchronous mock adapter request, then verifies completion after rewind.
 It requires neither a model nor a physical GPU and does not certify GPU inference.
 

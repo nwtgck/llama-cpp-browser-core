@@ -18,9 +18,11 @@ console.log(core.readUtf8(version));
 await core.api.llama_backend_free();
 ```
 
-The dynamically imported modules and their neighboring Wasm assets must be served together. A bundler may not discover them automatically. After copying `profiles/` into a public directory, set `baseURL`, for example `new URL('/runtime/profiles/', location.origin)`. This is an example path, not a required deployment layout. Do not mix generated JavaScript and Wasm from different artifact commits.
+The example defaults to `variant: 'browser'` (`ASSERTIONS=0`, `ENVIRONMENT=web,worker`). For Node.js tests use `createCore({ profile: 'cpu-wasm32', variant: 'test' })`; this variant retains assertions and Node.js support. Direct imports use `llama-cpp-browser-core/profiles/cpu-wasm32/browser/core.mjs` or the matching `test/` path. Variants never switch automatically based on the execution environment.
 
-Generated-module types are in each profile's `core.d.ts`; normalized C function types are in `api/functions.d.ts`, with layout identifiers in `api/schema.json`. The native core reports actual memory layouts. `manifest.json` records source commits, build settings, file hashes, and performed checks. The `lcb_` C bindings normalize pointers and sizes to JavaScript `bigint` and replace structure return values with explicit return-storage pointers.
+The dynamically imported modules and their neighboring Wasm assets must be served together. A bundler may not discover them automatically. After copying `profiles/` into a public directory, set `baseURL`, for example `new URL('/runtime/profiles/', location.origin)`. This is an example path, not a required deployment layout. Do not mix generated JavaScript and Wasm from different profiles, variants, or artifact commits.
+
+Generated-module types are in each `profiles/<profile>/<variant>/core.d.ts`; normalized C function types are in `api/functions.d.ts`, with layout identifiers in `api/schema.json`. The native core reports actual memory layouts. Manifest format 2 records build settings and performed checks under `profiles[profile].variants[variant]`, plus source commits and all payload hashes. Passing a test-variant check does not establish that the browser variant passed it. The `lcb_` C bindings normalize pointers and sizes to JavaScript `bigint` and replace structure return values with explicit return-storage pointers.
 
 This is not a high-level chat library. Applications own files, workers, generation loops, conversations, cancellation, and data formats. `mountReadOnlyFile` is an optional adapter for synchronous range reads; it does not impose a storage backend.
 

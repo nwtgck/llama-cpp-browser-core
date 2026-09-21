@@ -16,9 +16,13 @@ class ProfileConfiguration(unittest.TestCase):
     def test_ci_builds_every_packaged_profile(self):
         profiles = json.loads((ROOT / 'config/profiles.json').read_text())
         workflow = (ROOT / '.github/workflows/build.yml').read_text()
-        matrix = workflow.split('        profile:\n', 1)[1].split('    steps:', 1)[0]
+        matrix = workflow.split('        profile:\n', 1)[1].split('        variant:', 1)[0]
         self.assertEqual(set(re.findall(r'^          - ([a-z0-9-]+)$', matrix, re.MULTILINE)),
                          set(profiles))
+        variants = json.loads((ROOT / 'config/variants.json').read_text())
+        variant_matrix = workflow.split('        variant:\n', 1)[1].split('    steps:', 1)[0]
+        self.assertEqual(set(re.findall(r'^          - ([a-z0-9-]+)$', variant_matrix, re.MULTILINE)),
+                         set(variants))
 
     def test_each_profile_passes_its_suspension_and_memory_configuration(self):
         profiles = json.loads((ROOT / 'config/profiles.json').read_text())
@@ -30,41 +34,51 @@ class ProfileConfiguration(unittest.TestCase):
             'webgpu-wasm64-jspi': ('ON', 'ON', 'ON', 'OFF', '17179869184'),
         }
         self.assertEqual(set(profiles), set(expected))
+        variants = json.loads((ROOT / 'config/variants.json').read_text())
+        self.assertEqual(variants, {
+            'browser': {'assertions': 0, 'environment': 'web,worker'},
+            'test': {'assertions': 1, 'environment': 'web,worker,node'},
+        })
         toolchain = json.loads((ROOT / 'config/toolchain.json').read_text())
         with tempfile.TemporaryDirectory(prefix='lcb-profile-test-') as temporary:
             root = Path(temporary)
             (root / 'config').mkdir()
             (root / 'config/profiles.json').write_text(json.dumps(profiles))
+            (root / 'config/variants.json').write_text(json.dumps(variants))
             (root / 'config/toolchain.json').write_text(json.dumps(toolchain))
             (root / 'vendor/llama.cpp/include').mkdir(parents=True)
             (root / 'vendor/llama.cpp/include/llama.h').touch()
             (root / '.tools/emdawnwebgpu_pkg').mkdir(parents=True)
             (root / '.tools/emdawnwebgpu_pkg/emdawnwebgpu.port.py').touch()
             for profile, values in expected.items():
-                with self.subTest(profile=profile), \
-                     patch.object(build, 'ROOT', root), \
-                     patch.object(build, 'source_status', return_value=[]), \
-                     patch.object(build.shutil, 'which', return_value='/test-toolchain/emcc'), \
-                     patch.object(build, 'verify_asyncify_bigint_patch') as verify_patch, \
-                     patch.object(build, 'output', side_effect=[
-                         toolchain['llamaCommit'], f'emcc {toolchain["emsdkVersion"]}', 'a' * 40,
-                     ]), \
-                     patch.object(build.subprocess, 'run') as run, \
-                     patch.object(sys, 'argv', ['build.py', '--profile', profile]), \
-                     patch('builtins.print'):
-                    build.main()
-                    command = run.call_args_list[0].args[0]
-                    names = ('MEMORY64', 'WEBGPU', 'JSPI', 'ASYNCIFY', 'MAXIMUM_MEMORY')
-                    for name, value in zip(names, values):
-                        self.assertIn(f'-DLCB_{name}={value}', command)
-                    self.assertEqual(any(arg.startswith('-DEMDAWNWEBGPU_DIR=') for arg in command),
-                                     profiles[profile]['webgpu'])
-                    provenance = json.loads((root / 'build' / profile / 'provenance.json').read_text())
-                    self.assertEqual(provenance['configuration'], profiles[profile])
-                    if profiles[profile]['asyncify']:
-                        verify_patch.assert_called_once_with(Path('/test-toolchain'), toolchain['emscriptenAsyncifyBigIntPatch'])
-                    else:
-                        verify_patch.assert_not_called()
+                for variant, settings in variants.items():
+                    with self.subTest(profile=profile, variant=variant), \
+                         patch.object(build, 'ROOT', root), \
+                         patch.object(build, 'source_status', return_value=[]), \
+                         patch.object(build.shutil, 'which', return_value='/test-toolchain/emcc'), \
+                         patch.object(build, 'verify_asyncify_bigint_patch') as verify_patch, \
+                         patch.object(build, 'output', side_effect=[
+                             toolchain['llamaCommit'], f'emcc {toolchain["emsdkVersion"]}', 'a' * 40,
+                         ]), \
+                         patch.object(build.subprocess, 'run') as run, \
+                         patch.object(sys, 'argv', ['build.py', '--profile', profile, '--variant', variant]), \
+                         patch('builtins.print'):
+                        build.main()
+                        command = run.call_args_list[0].args[0]
+                        self.assertIn(f'-DLCB_VARIANT={variant}', command)
+                        names = ('MEMORY64', 'WEBGPU', 'JSPI', 'ASYNCIFY', 'MAXIMUM_MEMORY')
+                        for name, value in zip(names, values):
+                            self.assertIn(f'-DLCB_{name}={value}', command)
+                        self.assertEqual(any(arg.startswith('-DEMDAWNWEBGPU_DIR=') for arg in command),
+                                         profiles[profile]['webgpu'])
+                        provenance = json.loads((root / 'build' / profile / variant / 'provenance.json').read_text())
+                        self.assertEqual(provenance['configuration'], profiles[profile])
+                        self.assertEqual(provenance['variant'], variant)
+                        self.assertEqual(provenance['variantConfiguration'], settings)
+                        if profiles[profile]['asyncify']:
+                            verify_patch.assert_called_once_with(Path('/test-toolchain'), toolchain['emscriptenAsyncifyBigIntPatch'])
+                        else:
+                            verify_patch.assert_not_called()
 
 
 if __name__ == '__main__':

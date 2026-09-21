@@ -11,6 +11,7 @@ import tempfile
 
 ROOT=Path(__file__).resolve().parents[1]
 RUNTIME_NAME='llama-cpp-browser-core'
+VARIANTS=json.loads((ROOT/'config/variants.json').read_text())
 # Preserve complete original files where notices are embedded in source. This
 # avoids extracting only one of a header's licenses or dropping contributor text.
 EMBEDDED_NOTICE_FILES = (
@@ -57,6 +58,7 @@ def validate(directory: Path, require_clean=True):
         if key in package: raise ValueError(f'Unexpected install-time input: {key}')
     if package['name']!=RUNTIME_NAME: raise ValueError('Wrong package name')
     manifest=json.loads((directory/'manifest.json').read_text())
+    if manifest['formatVersion']!=2: raise ValueError('Unsupported manifest format')
     expected={f['path']:f for f in manifest['files']}
     required_notices={'licenses/embedded/'+path+'.txt' for path in EMBEDDED_NOTICE_FILES}
     if not required_notices.issubset(expected):
@@ -74,15 +76,22 @@ def validate(directory: Path, require_clean=True):
         if path.is_symlink() or path.stat().st_size!=file['bytes'] or sha(path)!=file['sha256']:
             raise ValueError(f'Invalid payload: {rel}')
         if path.stat().st_size >= 100*1024**2: raise ValueError(f'GitHub single-file size guard exceeded: {rel}')
-    for name, info in manifest['profiles'].items():
-        if require_clean and info['sourceDirty']:
-            details={key:info.get(key,'not recorded') for key in
-                     ('sourceStatusBeforeBuild','sourceStatusAfterBuild')}
-            raise ValueError(f'Cannot publish a dirty source build: {name}\n'+json.dumps(details,indent=2))
-        for ext in ('mjs','wasm','d.ts'):
-            if f'profiles/{name}/core.{ext}' not in expected: raise ValueError(f'Missing {name} runtime')
-        if (directory/f'profiles/{name}/core.wasm').read_bytes()[:8] != b'\x00asm\x01\x00\x00\x00':
-            raise ValueError('Not a WebAssembly module')
+    for name, profile in manifest['profiles'].items():
+        if set(profile['variants'])!=set(VARIANTS): raise ValueError(f'Missing or unknown variant: {name}')
+        for variant, info in profile['variants'].items():
+            if info['profile']!=name or info['variant']!=variant or info['variantConfiguration']!=VARIANTS[variant]:
+                raise ValueError(f'Variant provenance mismatch: {name}/{variant}')
+            if info['sourceCommit']!=manifest['sourceCommit'] or info['llamaCommit']!=manifest['llamaCommit']:
+                raise ValueError('Mixed source commits in manifest')
+            if require_clean and info['sourceDirty']:
+                details={key:info.get(key,'not recorded') for key in
+                         ('sourceStatusBeforeBuild','sourceStatusAfterBuild')}
+                raise ValueError(f'Cannot publish a dirty source build: {name}/{variant}\n'+json.dumps(details,indent=2))
+            for ext in ('mjs','wasm','d.ts'):
+                if f'profiles/{name}/{variant}/core.{ext}' not in expected:
+                    raise ValueError(f'Missing {name}/{variant} runtime')
+            if (directory/f'profiles/{name}/{variant}/core.wasm').read_bytes()[:8] != b'\x00asm\x01\x00\x00\x00':
+                raise ValueError('Not a WebAssembly module')
     packed=json.loads(subprocess.check_output(['npm','pack','--dry-run','--json'],cwd=directory,text=True))
     pack_paths={x['path'] for x in packed[0]['files']}
     if pack_paths != actual: raise ValueError(f'npm pack file mismatch: {sorted(actual ^ pack_paths)}')
@@ -94,24 +103,29 @@ def build_package(build_root: Path, destination: Path, profiles: list[str], *, l
     with tempfile.TemporaryDirectory(prefix='lcb-package-') as tmp:
         out=Path(tmp)
         for name in profiles:
-            build=build_root/name
-            data=json.loads((build/'provenance.json').read_text())
-            if data['profile']!=name: raise ValueError('Profile mismatch')
-            if source is not None and (source!=data['sourceCommit'] or upstream!=data['llamaCommit']):
-                raise ValueError('Mixed source commits in one package')
-            source=data['sourceCommit']; upstream=data['llamaCommit']; provenance[name]=data
-            generated=build/'generated'
-            current=(generated/'schema.json').read_bytes()
-            if schema is not None and current!=schema: raise ValueError('Mixed binding schemas')
-            schema=current
-            runtime=out/'profiles'/name
-            shutil.copytree(build/'runtime',runtime)
-            for p in runtime.rglob('*'):
-                if p.is_symlink(): raise ValueError('Unexpected symlink in runtime output')
-            if not (out/'api').exists():
-                (out/'api').mkdir()
-                for file in ('schema.json','schema.mjs','functions.d.ts','exports.json'):
-                    shutil.copy2(generated/file,out/'api'/file)
+            provenance[name]={'variants':{}}
+            for variant in VARIANTS:
+                build=build_root/name/variant
+                data=json.loads((build/'provenance.json').read_text())
+                if data['profile']!=name: raise ValueError('Profile mismatch')
+                if data['variant']!=variant or data['variantConfiguration']!=VARIANTS[variant]:
+                    raise ValueError(f'Variant provenance mismatch: {name}/{variant}')
+                if source is not None and (source!=data['sourceCommit'] or upstream!=data['llamaCommit']):
+                    raise ValueError('Mixed source commits in one package')
+                source=data['sourceCommit']; upstream=data['llamaCommit']
+                provenance[name]['variants'][variant]=data
+                generated=build/'generated'
+                current=(generated/'schema.json').read_bytes()
+                if schema is not None and current!=schema: raise ValueError('Mixed binding schemas')
+                schema=current
+                runtime=out/'profiles'/name/variant
+                shutil.copytree(build/'runtime',runtime)
+                for p in runtime.rglob('*'):
+                    if p.is_symlink(): raise ValueError('Unexpected symlink in runtime output')
+                if not (out/'api').exists():
+                    (out/'api').mkdir()
+                    for file in ('schema.json','schema.mjs','functions.d.ts','exports.json'):
+                        shutil.copy2(generated/file,out/'api'/file)
         example=out/'examples/runtime'; example.mkdir(parents=True)
         for file in EXAMPLE_RUNTIME_FILES:
             shutil.copy2(ROOT/'examples/runtime'/file,example/file)
@@ -130,7 +144,7 @@ def build_package(build_root: Path, destination: Path, profiles: list[str], *, l
                         './profiles/*/core.mjs':{'types':'./profiles/*/core.d.ts','import':'./profiles/*/core.mjs'},
                         './profiles/*':'./profiles/*','./api/*':'./api/*','./manifest.json':'./manifest.json'}}
         (out/'package.json').write_text(json.dumps(pkg,indent=2)+'\n')
-        manifest={'formatVersion':1,'sourceCommit':source,'llamaCommit':upstream,'profiles':provenance,
+        manifest={'formatVersion':2,'sourceCommit':source,'llamaCommit':upstream,'profiles':provenance,
                   'licenseRoots':[p.name for p in license_roots],
                   'files':[{'path':p.relative_to(out).as_posix(),'bytes':p.stat().st_size,'sha256':sha(p)}
                            for p in sorted(out.rglob('*')) if p.is_file()]}

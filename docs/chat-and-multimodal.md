@@ -11,7 +11,7 @@ The Emscripten module works independently of the always-shipped `examples/runtim
 Applications can use that tested example to implement their own TypeScript host code:
 
 ```js
-import createNative from './profiles/cpu-wasm32/core.mjs';
+import createNative from './profiles/cpu-wasm32/browser/core.mjs';
 const native = await createNative();
 const inputs = new native.common_chat_templates_inputs();
 const messagesJSON = native.common_json.parse('[{"role":"user","content":"Hello"}]');
@@ -89,7 +89,7 @@ Profiles remain single-threaded. Some upstream audio paths spawn threads, includ
 fixed four-thread Parakeet preprocessing, so `n_threads=1` is not a general remedy.
 Audio generation is experimental upstream. Exposed APIs do not certify model support.
 
-Actions checks four profile builds, standard type generation, package/schema consistency and size limits,
+Actions checks all five profiles in browser and test variants, standard type generation, package/schema consistency and size limits,
 then exercises direct generated-module chat primitives and RGB/PCM allocation in
 CPU Chromium. Trained tool-model inference, image/audio mmproj inference, and WebGPU
 inference remain separate validations. Native host smoke covers C bindings only.

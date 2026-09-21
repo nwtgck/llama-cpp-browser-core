@@ -12,6 +12,16 @@ option(LCB_WEBGPU "Link the WebGPU backend" OFF)
 option(LCB_JSPI "Suspend WebGPU calls with JSPI" ${LCB_WEBGPU})
 option(LCB_ASYNCIFY "Suspend WebGPU calls with Asyncify" OFF)
 set(LCB_MAXIMUM_MEMORY "4294967296" CACHE STRING "Maximum WebAssembly linear memory in bytes")
+set(LCB_VARIANT "browser" CACHE STRING "Runtime variant: browser or test")
+set_property(CACHE LCB_VARIANT PROPERTY STRINGS browser test)
+if(NOT LCB_VARIANT STREQUAL "browser" AND NOT LCB_VARIANT STREQUAL "test")
+    message(FATAL_ERROR "Unknown runtime variant: ${LCB_VARIANT}")
+endif()
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/config/variants.json" LCB_VARIANTS)
+string(JSON LCB_ASSERTIONS GET "${LCB_VARIANTS}" "${LCB_VARIANT}" assertions)
+string(JSON LCB_ENVIRONMENT GET "${LCB_VARIANTS}" "${LCB_VARIANT}" environment)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/config/variants.json")
 
 if(LCB_JSPI AND LCB_ASYNCIFY)
     message(FATAL_ERROR "JSPI and Asyncify are mutually exclusive")
@@ -101,10 +111,10 @@ else()
     target_link_options(core PRIVATE
         --bind --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createLlamaCppCore
         --emit-tsd "${CMAKE_CURRENT_BINARY_DIR}/runtime/core.d.ts"
-        -sENVIRONMENT=web,worker,node -sALLOW_MEMORY_GROWTH=1
+        "-sENVIRONMENT=${LCB_ENVIRONMENT}" -sALLOW_MEMORY_GROWTH=1
         "-sMAXIMUM_MEMORY=${LCB_MAXIMUM_MEMORY}" -sINITIAL_HEAP=33554432
         -sSTACK_SIZE=2097152 -sWASM_BIGINT=1 -sALLOW_TABLE_GROWTH=1
-        -sFORCE_FILESYSTEM=1 -sASSERTIONS=1 -sEXIT_RUNTIME=0
+        -sFORCE_FILESYSTEM=1 "-sASSERTIONS=${LCB_ASSERTIONS}" -sEXIT_RUNTIME=0
         "-sEXPORTED_FUNCTIONS=@${LCB_GENERATED}/exports.json"
         "-sEXPORTED_RUNTIME_METHODS=['HEAPU8','FS','WORKERFS','addFunction','removeFunction','UTF8ToString','stringToUTF8','lengthBytesUTF8','ccall','cwrap']"
         "-sINCOMING_MODULE_JS_API=['locateFile','wasmBinary','wasmMemory','instantiateWasm','print','printErr','onAbort','preRun','postRun','noInitialRun','mainScriptUrlOrBlob']"

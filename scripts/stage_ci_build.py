@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage only one profile's package inputs for transfer between CI runners."""
+"""Stage one profile/variant pair's package inputs between CI runners."""
 from __future__ import annotations
 import argparse
 import json
@@ -7,22 +7,24 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
-from package_runtime import copy_license_notices
+from package_runtime import VARIANTS, copy_license_notices
 
 ROOT=Path(__file__).resolve().parents[1]
 API_FILES=('schema.json','schema.mjs','functions.d.ts','exports.json')
 
 
-def stage_profile(build_root: Path, output: Path, profile: str, *, source_commit: str,
+def stage_profile(build_root: Path, output: Path, profile: str, *, variant: str, source_commit: str,
                   toolchain: dict, configuration: dict):
     if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',profile):
         raise ValueError('Invalid profile name')
-    build=build_root/profile
-    target=output/profile
+    if variant not in VARIANTS: raise ValueError('Invalid variant name')
+    build=build_root/profile/variant
+    target=output/profile/variant
     if target.exists() or target.is_symlink():
-        raise ValueError(f'Profile already staged: {profile}')
+        raise ValueError(f'Profile variant already staged: {profile}/{variant}')
     # Never follow links to unrelated build inputs or silently omit a missing asset.
-    if build.is_symlink() or (build/'runtime').is_symlink() or (build/'generated').is_symlink():
+    if ((build_root/profile).is_symlink() or build.is_symlink()
+            or (build/'runtime').is_symlink() or (build/'generated').is_symlink()):
         raise ValueError('Unexpected symlink in build output')
     for path in (build/'runtime').rglob('*'):
         if path.is_symlink(): raise ValueError('Unexpected symlink in runtime output')
@@ -34,6 +36,8 @@ def stage_profile(build_root: Path, output: Path, profile: str, *, source_commit
     provenance=json.loads((build/'provenance.json').read_text())
     if provenance['profile']!=profile or provenance['sourceCommit']!=source_commit:
         raise ValueError('Build provenance does not match this source/profile')
+    if provenance['variant']!=variant or provenance['variantConfiguration']!=VARIANTS[variant]:
+        raise ValueError('Build provenance does not match the requested variant')
     if provenance['llamaCommit']!=toolchain['llamaCommit'] or provenance['toolchain']!=toolchain:
         raise ValueError('Build provenance does not match the pinned toolchain')
     if provenance['configuration']!=configuration:
@@ -65,6 +69,7 @@ def main():
     profiles=json.loads((ROOT/'config/profiles.json').read_text())
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--profile',choices=list(profiles),required=True)
+    parser.add_argument('--variant',choices=list(VARIANTS),required=True)
     parser.add_argument('--output',type=Path,default=ROOT/'build/ci-upload')
     parser.add_argument('--include-toolchain-notices',action='store_true')
     args=parser.parse_args()
@@ -76,7 +81,7 @@ def main():
     toolchain=json.loads((ROOT/'config/toolchain.json').read_text())
     source=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     stage_profile(ROOT/'build',output,args.profile,source_commit=source,
-                  toolchain=toolchain,configuration=profiles[args.profile])
+                  variant=args.variant,toolchain=toolchain,configuration=profiles[args.profile])
     if args.include_toolchain_notices:
         stage_toolchain_notices([ROOT/'.tools/emsdk/upstream/emscripten',ROOT/'.tools/emdawnwebgpu_pkg'],output)
     print(output)

@@ -40,6 +40,7 @@ class BuildProvenance(unittest.TestCase):
         shutil.copy2(ROOT/'.gitignore',self.root/'.gitignore')
         (self.root/'config').mkdir()
         shutil.copy2(ROOT/'config/profiles.json',self.root/'config/profiles.json')
+        shutil.copy2(ROOT/'config/variants.json',self.root/'config/variants.json')
         toolchain=json.loads((ROOT/'config/toolchain.json').read_text())
         toolchain['llamaCommit']=upstream_sha
         patched_runtime=b'Synthetic patched Asyncify runtime for the compiler fixture.\n'
@@ -103,12 +104,12 @@ class BuildProvenance(unittest.TestCase):
         env=self.env.copy()
         if mode is not None:
             env['LCB_TEST_MODE']=mode
-        result=subprocess.run([sys.executable,str(self.root/'scripts/build.py'),'--profile',profile],
+        result=subprocess.run([sys.executable,str(self.root/'scripts/build.py'),'--profile',profile,'--variant','browser'],
                               cwd=cwd or self.root,env=env,text=True,capture_output=True,check=check)
         self.last_result=result
         if result.returncode:
             return result
-        return json.loads((self.root/'build'/profile/'provenance.json').read_text())
+        return json.loads((self.root/'build'/profile/'browser/provenance.json').read_text())
 
     def test_all_profiles_keep_probe_outputs_in_the_build_directory(self):
         dawn=self.root/'.tools/emdawnwebgpu_pkg'
@@ -123,7 +124,7 @@ class BuildProvenance(unittest.TestCase):
                 self.assertEqual(info['sourceStatusAfterBuild'],[])
                 self.assertEqual(self.git(self.root,'status','--porcelain','--untracked-files=all'),'')
                 for name in ('a.out.js','a.out.wasm'):
-                    self.assertTrue((self.root/'build'/profile/name).is_file())
+                    self.assertTrue((self.root/'build'/profile/'browser'/name).is_file())
                     self.assertFalse((self.root/name).exists())
                     self.assertFalse((self.caller/name).exists())
 
@@ -132,7 +133,7 @@ class BuildProvenance(unittest.TestCase):
         self.assertFalse(info['sourceDirty'])
         self.assertEqual(list(self.caller.iterdir()),[])
         self.assertEqual(self.git(self.root,'status','--porcelain','--untracked-files=all'),'')
-        self.assertTrue((self.root/'build/cpu-wasm32/a.out.js').is_file())
+        self.assertTrue((self.root/'build/cpu-wasm32/browser/a.out.js').is_file())
 
     def test_existing_tracked_changes_remain_dirty_and_are_reported(self):
         (self.root/'README.md').write_text('local changes\n')

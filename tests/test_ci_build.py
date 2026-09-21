@@ -12,7 +12,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts'))
 import package_runtime
 import stage_ci_build
-from package_runtime import build_package, copy_license_notices, validate
+from package_runtime import VARIANTS, build_package, copy_license_notices, validate
 from stage_ci_build import API_FILES, stage_profile, stage_toolchain_notices
 
 
@@ -27,25 +27,29 @@ class CiBuildArtifacts(unittest.TestCase):
         self.toolchain=json.loads((ROOT/'config/toolchain.json').read_text())
         self.profiles=json.loads((ROOT/'config/profiles.json').read_text())
         for name,cfg in self.profiles.items():
-            folder=self.build/name
-            (folder/'runtime/auxiliary').mkdir(parents=True)
-            (folder/'generated').mkdir()
-            (folder/'runtime/core.wasm').write_bytes(b'\0asm\1\0\0\0')
-            (folder/'runtime/core.mjs').write_text('// CI transfer fixture, not an inference runtime.\n')
-            (folder/'runtime/core.d.ts').write_text('export default function create(): Promise<unknown>;\n')
-            (folder/'runtime/auxiliary/worker.js').write_text('// Complete runtime tree is preserved.\n')
-            for file in API_FILES:
-                (folder/'generated'/file).write_text('{}\n' if file.endswith('.json') else '// Generated API fixture\n')
-            (folder/'generated/bindings.cpp').write_text('// Build-only intermediate.\n')
-            (folder/'CMakeCache.txt').write_text('PRIVATE_BUILD_PATH=/example\n')
-            (folder/'object.o').write_bytes(b'not a runtime asset')
-            (folder/'libcore.a').write_bytes(b'not a runtime asset')
-            data={'profile':name,'sourceCommit':self.source_commit,'sourceDirty':False,
-                  'sourceStatusBeforeBuild':[],'sourceStatusAfterBuild':[],
-                  'llamaCommit':self.toolchain['llamaCommit'],'toolchain':self.toolchain,
-                  'configuration':cfg,'builtAtUnix':123456,
-                  'validation':{'compiled':True,'browserSmoke':False,'realModelInference':False}}
-            (folder/'provenance.json').write_text(json.dumps(data,indent=2)+'\n')
+            for variant,settings in VARIANTS.items():
+                folder=self.build/name/variant
+                (folder/'runtime/auxiliary').mkdir(parents=True)
+                (folder/'generated').mkdir()
+                marker=(name+'/'+variant).encode()
+                # A valid empty module with a custom section distinguishes each
+                # pair without compiling or pretending to exercise inference.
+                (folder/'runtime/core.wasm').write_bytes(b'\0asm\1\0\0\0\0'+bytes([len(marker)+1,len(marker)])+marker)
+                (folder/'runtime/core.mjs').write_text(f'// CI transfer fixture: {name}/{variant}, not an inference runtime.\n')
+                (folder/'runtime/core.d.ts').write_text('export default function create(): Promise<unknown>;\n')
+                (folder/'runtime/auxiliary/worker.js').write_text('// Complete runtime tree is preserved.\n')
+                for file in API_FILES:
+                    (folder/'generated'/file).write_text('{}\n' if file.endswith('.json') else '// Generated API fixture\n')
+                (folder/'generated/bindings.cpp').write_text('// Build-only intermediate.\n')
+                (folder/'CMakeCache.txt').write_text('PRIVATE_BUILD_PATH=/example\n')
+                (folder/'object.o').write_bytes(b'not a runtime asset')
+                (folder/'libcore.a').write_bytes(b'not a runtime asset')
+                data={'profile':name,'variant':variant,'variantConfiguration':settings,'sourceCommit':self.source_commit,'sourceDirty':False,
+                      'sourceStatusBeforeBuild':[],'sourceStatusAfterBuild':[],
+                      'llamaCommit':self.toolchain['llamaCommit'],'toolchain':self.toolchain,
+                      'configuration':cfg,'builtAtUnix':123456,
+                      'validation':{'compiled':True,'browserSmoke':False,'realModelInference':False}}
+                (folder/'provenance.json').write_text(json.dumps(data,indent=2)+'\n')
         self.sdk=self.root/'tools/emscripten'
         self.dawn=self.root/'tools/emdawnwebgpu_pkg'
         for tool in (self.sdk,self.dawn):
@@ -74,13 +78,13 @@ class CiBuildArtifacts(unittest.TestCase):
             file.parent.mkdir(parents=True,exist_ok=True)
             file.write_text('Synthetic embedded notice fixture\n'+relative+'\n')
 
-    def stage(self,name='cpu-wasm32',output=None,source_commit=None):
+    def stage(self,name='cpu-wasm32',output=None,source_commit=None,variant='browser'):
         return stage_profile(self.build,output or self.output,name,
-                             source_commit=source_commit or self.source_commit,
+                             variant=variant,source_commit=source_commit or self.source_commit,
                              toolchain=self.toolchain,configuration=self.profiles[name])
 
-    def set_provenance(self,name,**fields):
-        file=self.build/name/'provenance.json';data=json.loads(file.read_text())
+    def set_provenance(self,name,build_variant='browser',**fields):
+        file=self.build/name/build_variant/'provenance.json';data=json.loads(file.read_text())
         data.update(fields);file.write_text(json.dumps(data,indent=2)+'\n')
 
     @staticmethod
@@ -94,14 +98,24 @@ class CiBuildArtifacts(unittest.TestCase):
         expected|={'generated/'+name for name in API_FILES}|{'provenance.json'}
         self.assertEqual(set(self.contents(folder)),expected)
         for name in expected:
-            self.assertEqual((folder/name).read_bytes(),(self.build/'cpu-wasm32'/name).read_bytes())
+            self.assertEqual((folder/name).read_bytes(),(self.build/'cpu-wasm32/browser'/name).read_bytes())
         self.assertFalse((folder/'CMakeCache.txt').exists())
         self.assertFalse((folder/'generated/bindings.cpp').exists())
+
+    def test_variants_keep_their_matching_javascript_and_wasm(self):
+        for variant in VARIANTS:
+            staged=self.stage(variant=variant)
+            original=self.build/'cpu-wasm32'/variant/'runtime'
+            for file in ('core.mjs','core.wasm'):
+                self.assertEqual((staged/'runtime'/file).read_bytes(),(original/file).read_bytes())
+        for file in ('core.mjs','core.wasm'):
+            self.assertNotEqual((self.output/'cpu-wasm32/browser/runtime'/file).read_bytes(),
+                                (self.output/'cpu-wasm32/test/runtime'/file).read_bytes())
 
     def test_missing_runtime_or_api_prevents_staging(self):
         for file in ['runtime/core.wasm','runtime/core.d.ts','generated/schema.mjs','provenance.json']:
             with self.subTest(file=file):
-                source=self.build/'cpu-wasm32'/file;original=source.read_bytes();source.unlink()
+                source=self.build/'cpu-wasm32/browser'/file;original=source.read_bytes();source.unlink()
                 with self.assertRaisesRegex(ValueError,'Missing or linked'):
                     self.stage()
                 self.assertFalse((self.output/'cpu-wasm32').exists())
@@ -117,9 +131,10 @@ class CiBuildArtifacts(unittest.TestCase):
                 self.set_provenance('cpu-wasm32',sourceDirty=False,validation={'compiled':True})
 
     def test_stale_source_profile_toolchain_or_config_is_rejected(self):
-        file=self.build/'cpu-wasm32/provenance.json';original=file.read_bytes()
+        file=self.build/'cpu-wasm32/browser/provenance.json';original=file.read_bytes()
         changes=[{'sourceCommit':'c'*40},{'profile':'cpu-wasm64'},
-                 {'llamaCommit':'d'*40},{'toolchain':{}},{'configuration':{}}]
+                 {'llamaCommit':'d'*40},{'toolchain':{}},{'configuration':{}},
+                 {'variant':'test'},{'variantConfiguration':VARIANTS['test']}]
         for change in changes:
             with self.subTest(change=change):
                 self.set_provenance('cpu-wasm32',**change)
@@ -129,17 +144,24 @@ class CiBuildArtifacts(unittest.TestCase):
 
     def test_symlinked_payload_is_rejected(self):
         external=self.root/'external';external.write_text('Do not follow this link.')
-        link=self.build/'cpu-wasm32/runtime/extra.js';link.symlink_to(external)
+        link=self.build/'cpu-wasm32/browser/runtime/extra.js';link.symlink_to(external)
         with self.assertRaisesRegex(ValueError,'symlink'):self.stage()
         link.unlink()
-        schema=self.build/'cpu-wasm32/generated/schema.json';schema.unlink();schema.symlink_to(external)
+        schema=self.build/'cpu-wasm32/browser/generated/schema.json';schema.unlink();schema.symlink_to(external)
         with self.assertRaisesRegex(ValueError,'linked'):self.stage()
+
+    def test_symlinked_profile_directory_is_rejected(self):
+        original=self.build/'cpu-wasm32'
+        elsewhere=self.root/'relocated-profile'
+        original.rename(elsewhere)
+        original.symlink_to(elsewhere,target_is_directory=True)
+        with self.assertRaisesRegex(ValueError,'symlink'):self.stage()
 
     def test_profile_paths_and_repeated_staging_are_rejected(self):
         for name in ['../escape','/absolute','a/b','CPU']:
             with self.assertRaisesRegex(ValueError,'Invalid profile'):
                 stage_profile(self.build,self.output,name,source_commit=self.source_commit,
-                              toolchain=self.toolchain,configuration={})
+                              variant='browser',toolchain=self.toolchain,configuration={})
         self.stage()
         before=self.contents(self.output)
         with self.assertRaisesRegex(ValueError,'already staged'):self.stage()
@@ -169,7 +191,7 @@ class CiBuildArtifacts(unittest.TestCase):
         uploads=self.root/'uploads'
         def build_shard(name):
             folder=uploads/name
-            self.stage(name,folder)
+            for variant in VARIANTS:self.stage(name,folder,variant=variant)
             if name=='webgpu-wasm64-jspi':stage_toolchain_notices([self.sdk,self.dawn],folder)
             return folder
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
@@ -193,22 +215,25 @@ class CiBuildArtifacts(unittest.TestCase):
         self.assertEqual(self.contents(merged_package),self.contents(serial_package))
         self.assertEqual(validate(merged_package)['profiles'],list(self.profiles))
         manifest=json.loads((merged_package/'manifest.json').read_text())
-        for provenance in manifest['profiles'].values():
-            self.assertFalse(provenance['validation']['browserSmoke'])
-            self.assertFalse(provenance['validation']['realModelInference'])
+        for profile in manifest['profiles'].values():
+            self.assertEqual(set(profile['variants']),set(VARIANTS))
+            for provenance in profile['variants'].values():
+                self.assertFalse(provenance['validation']['browserSmoke'])
+                self.assertFalse(provenance['validation']['realModelInference'])
 
     def test_reassembly_still_rejects_mixed_schemas_and_source_commits(self):
-        for name in self.profiles:self.stage(name)
+        for name in self.profiles:
+            for variant in VARIANTS:self.stage(name,variant=variant)
         stage_toolchain_notices([self.sdk,self.dawn],self.output)
         roots=[self.upstream,self.output/'toolchain-licenses/emscripten',
                self.output/'toolchain-licenses/emdawnwebgpu_pkg']
-        file=self.output/'cpu-wasm64/generated/schema.json';original=file.read_bytes()
+        file=self.output/'cpu-wasm64/browser/generated/schema.json';original=file.read_bytes()
         file.write_text('{"different":true}')
         with patch.object(package_runtime,'ROOT',self.source):
             with self.assertRaisesRegex(ValueError,'Mixed binding schemas'):
                 build_package(self.output,self.root/'package',list(self.profiles),license_roots=roots)
             file.write_bytes(original)
-            provenance=self.output/'cpu-wasm64/provenance.json'
+            provenance=self.output/'cpu-wasm64/browser/provenance.json'
             data=json.loads(provenance.read_text());data['sourceCommit']='c'*40;provenance.write_text(json.dumps(data))
             with self.assertRaisesRegex(ValueError,'Mixed source commits'):
                 build_package(self.output,self.root/'package',list(self.profiles),license_roots=roots)
@@ -227,7 +252,7 @@ class CiBuildArtifacts(unittest.TestCase):
         (config/'toolchain.json').write_text(json.dumps(self.toolchain))
         shutil.copytree(self.sdk,self.root/'.tools/emsdk/upstream/emscripten')
         shutil.copytree(self.dawn,self.root/'.tools/emdawnwebgpu_pkg')
-        argv=['stage_ci_build.py','--profile','webgpu-wasm64-jspi','--include-toolchain-notices']
+        argv=['stage_ci_build.py','--profile','webgpu-wasm64-jspi','--variant','browser','--include-toolchain-notices']
         with patch.object(stage_ci_build,'ROOT',self.root), patch.object(sys,'argv',argv), \
              patch.object(stage_ci_build.subprocess,'check_output',return_value=self.source_commit+'\n') as git, \
              patch('builtins.print'):
@@ -235,17 +260,17 @@ class CiBuildArtifacts(unittest.TestCase):
         git.assert_called_once_with(['git','rev-parse','HEAD'],cwd=self.root,text=True)
         stage=self.root/'build/ci-upload'
         self.assertEqual({p.name for p in stage.iterdir()},{'webgpu-wasm64-jspi','toolchain-licenses'})
-        original=self.build/'webgpu-wasm64-jspi/provenance.json'
-        self.assertEqual((stage/'webgpu-wasm64-jspi/provenance.json').read_bytes(),original.read_bytes())
+        original=self.build/'webgpu-wasm64-jspi/browser/provenance.json'
+        self.assertEqual((stage/'webgpu-wasm64-jspi/browser/provenance.json').read_bytes(),original.read_bytes())
         self.assertTrue((stage/'toolchain-licenses/emscripten/LICENSE').is_file())
         self.assertTrue((stage/'toolchain-licenses/emdawnwebgpu_pkg/LICENSE').is_file())
 
     def test_cli_refuses_staging_outside_build_or_inside_a_profile(self):
         config=self.root/'config'; config.mkdir()
         (config/'profiles.json').write_text(json.dumps(self.profiles))
-        for output in (self.root,self.build,self.build/'cpu-wasm32/nested'):
+        for output in (self.root,self.build,self.build/'cpu-wasm32/browser/nested'):
             with self.subTest(output=output):
-                argv=['stage_ci_build.py','--profile','cpu-wasm32','--output',str(output)]
+                argv=['stage_ci_build.py','--profile','cpu-wasm32','--variant','browser','--output',str(output)]
                 with patch.object(stage_ci_build,'ROOT',self.root), patch.object(sys,'argv',argv), \
                      patch.object(stage_ci_build.subprocess,'check_output') as git, \
                      patch('sys.stderr'):

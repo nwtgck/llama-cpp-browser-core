@@ -29,7 +29,7 @@ jobs:
           npm test
           python3 -m unittest discover -s tests -p 'test_*.py'
   compile:
-    name: Build ${{ matrix.profile }}
+    name: Build ${{ matrix.profile }} / ${{ matrix.variant }}
     if: github.ref_type == 'branch' && github.ref_name != 'artifacts' && !startsWith(github.ref_name, 'artifacts/')
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -43,6 +43,9 @@ jobs:
           - webgpu-wasm32-asyncify
           - webgpu-wasm32-jspi
           - webgpu-wasm64-jspi
+        variant:
+          - browser
+          - test
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,22 +62,24 @@ jobs:
         shell: bash
         env:
           PROFILE: ${{ matrix.profile }}
+          VARIANT: ${{ matrix.variant }}
         run: |
           source .tools/emsdk/emsdk_env.sh
-          python3 scripts/build.py --profile "$PROFILE"
+          python3 scripts/build.py --profile "$PROFILE" --variant "$VARIANT"
       - name: Stage package inputs
         shell: bash
         env:
           PROFILE: ${{ matrix.profile }}
+          VARIANT: ${{ matrix.variant }}
         run: |
           extra=()
-          if [[ "$PROFILE" == "webgpu-wasm64-jspi" ]]; then
+          if [[ "$PROFILE" == "webgpu-wasm64-jspi" && "$VARIANT" == "browser" ]]; then
             extra+=(--include-toolchain-notices)
           fi
-          python3 scripts/stage_ci_build.py --profile "$PROFILE" "${extra[@]}"
+          python3 scripts/stage_ci_build.py --profile "$PROFILE" --variant "$VARIANT" "${extra[@]}"
       - uses: actions/upload-artifact@v4
         with:
-          name: profile-build-${{ matrix.profile }}
+          name: profile-build-${{ matrix.profile }}-${{ matrix.variant }}
           path: build/ci-upload/
           if-no-files-found: error
           # The staging script copies runtime/API/provenance and license files only.
@@ -104,7 +109,7 @@ jobs:
         with:
           pattern: profile-build-*
           path: build/
-          # Each shard owns a distinct profile directory. Only wasm64 WebGPU JSPI supplies notices.
+          # Every shard owns one profile/variant pair; only wasm64 WebGPU JSPI/browser supplies notices.
           merge-multiple: true
       - name: Assemble runtime-only package
         run: |
@@ -112,9 +117,9 @@ jobs:
             --license-root vendor/llama.cpp \
             --license-root build/toolchain-licenses/emscripten \
             --license-root build/toolchain-licenses/emdawnwebgpu_pkg
-      - name: Test Asyncify bigint suspension with real Wasm
+      - name: Test the Node-enabled Asyncify variant with real Wasm
         run: node tests/asyncify-rewind.mjs
-      - name: Test real CPU Wasm and wasm32 JSPI suspension in Chromium
+      - name: Test both variants with real CPU Wasm and GPU suspension in Chromium
         run: |
           npm install --prefix .tools/browser --no-save --package-lock=false playwright@1.58.2
           .tools/browser/node_modules/.bin/playwright install --with-deps chromium

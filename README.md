@@ -24,7 +24,9 @@ console.log(core.readUtf8(version));
 await core.api.llama_backend_free();
 ```
 
-Serve the selected profile's JavaScript, Wasm, and any auxiliary files together. Bundlers may not discover dynamically imported assets automatically. When copying `profiles/` to a public directory, pass its URL as `baseURL`:
+Each profile ships two variants under `profiles/<profile>/<variant>/`: `browser` uses `ASSERTIONS=0` and `ENVIRONMENT=web,worker`; `test` retains assertions and Node.js support with `ENVIRONMENT=web,worker,node`. The example defaults to `browser`; Node.js tests must explicitly select `variant: 'test'`. Each variant has its own matching JavaScript, Wasm, and generated types. Never mix files between variants, even within one artifact.
+
+Serve the selected profile and variant's JavaScript, Wasm, and any auxiliary files together. Bundlers may not discover dynamically imported assets automatically. When copying `profiles/` to a public directory, pass its URL as `baseURL`:
 
 ```js
 const core = await createCore({
@@ -43,15 +45,15 @@ Prerequisites: Linux, Git, Python 3.11 or later, Clang, CMake 3.24 or later, Nin
 git submodule update --init --recursive
 python3 scripts/setup_toolchain.py
 source .tools/emsdk/emsdk_env.sh
-python3 scripts/build.py --profile cpu-wasm32
-python3 scripts/build.py --profile cpu-wasm64
-python3 scripts/build.py --profile webgpu-wasm32-asyncify
-python3 scripts/build.py --profile webgpu-wasm32-jspi
-python3 scripts/build.py --profile webgpu-wasm64-jspi
+for profile in cpu-wasm32 cpu-wasm64 webgpu-wasm32-asyncify webgpu-wasm32-jspi webgpu-wasm64-jspi; do
+  for variant in browser test; do
+    python3 scripts/build.py --profile "$profile" --variant "$variant"
+  done
+done
 python3 scripts/package_runtime.py
 ```
 
-Build outputs go to `build/<profile>/runtime/`; the assembled package goes to `dist/package/`. Do not commit generated binaries to source branches. Toolchain and upstream pins are in `config/toolchain.json`; profile settings are in `config/profiles.json`.
+Build outputs go to `build/<profile>/<variant>/runtime/`; the assembled package goes to `dist/package/`. Do not commit generated binaries to source branches. Toolchain and upstream pins are in `config/toolchain.json`; profile and variant settings are in `config/profiles.json` and `config/variants.json`.
 
 | Profile | Pointer width | Maximum linear memory | Backends |
 |---|---:|---:|---|
@@ -87,7 +89,7 @@ The generated model is a small, deterministic, untrained GGUF fixture. Its purpo
 
 Source branches contain the pinned llama.cpp submodule and build tooling. The `artifacts` branch contains only the installable runtime, types, schemas, manifest, and license notices.
 
-GitHub Actions builds on pushes outside `artifacts` and `artifacts/**`. It runs host tests and builds the five profiles on separate runners. After all succeed, one assembly job runs Chromium smoke tests for the two CPU profiles, checks wasm32 JSPI suspension with a mocked unavailable GPU adapter, and verifies the combined package before publishing an append-only artifact commit. Only the publication job has repository write permission. Repository rules must permit that job to update the artifact branch.
+GitHub Actions builds on pushes outside `artifacts` and `artifacts/**`. It runs host tests and builds all five profiles in both variants on separate runners. After all succeed, one assembly job runs Chromium smoke tests for both variants of the two CPU profiles and all three WebGPU profiles with JSPI/Asyncify suspension with a mocked unavailable GPU adapter. A Node.js regression exercises the test variant's Asyncify suspension. The browser variant is tested directly; passing test-variant checks alone does not validate browser artifacts. The combined package is verified before publishing an append-only artifact commit. Only the publication job has repository write permission. Repository rules must permit that job to update the artifact branch.
 
 The artifact branch tip is the most recently published result, not necessarily a build from `main`. Consumers should pin the complete artifact commit and commit their lockfile. See the [distribution contract](docs/distribution.md).
 
