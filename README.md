@@ -46,6 +46,7 @@ source .tools/emsdk/emsdk_env.sh
 python3 scripts/build.py --profile cpu-wasm32
 python3 scripts/build.py --profile cpu-wasm64
 python3 scripts/build.py --profile webgpu-wasm32-asyncify
+python3 scripts/build.py --profile webgpu-wasm32-jspi
 python3 scripts/build.py --profile webgpu-wasm64-jspi
 python3 scripts/package_runtime.py
 ```
@@ -57,9 +58,10 @@ Build outputs go to `build/<profile>/runtime/`; the assembled package goes to `d
 | `cpu-wasm32` | 32-bit | 4 GiB | CPU |
 | `cpu-wasm64` | 64-bit | 16 GiB | CPU |
 | `webgpu-wasm32-asyncify` | 32-bit | 4 GiB | CPU and WebGPU without JSPI; experimental |
+| `webgpu-wasm32-jspi` | 32-bit | 4 GiB | CPU and WebGPU with JSPI; experimental |
 | `webgpu-wasm64-jspi` | 64-bit | 16 GiB | CPU and WebGPU; experimental |
 
-All profiles are single-threaded. The Asyncify profile uses transformed Wasm and JavaScript exception handling; it does not require memory64 or JSPI. It still requires Wasm SIMD and a usable WebGPU adapter/device. Asyncify adds code-size and execution overhead; applications should prefer the JSPI profile when supported and feature-detect their choice rather than use browser names. Memory limits are build-time ceilings, not guarantees that a browser can allocate that memory or run a model of that size. Browser and device support must be checked for the chosen profile.
+All profiles are single-threaded. The Asyncify profile uses transformed Wasm and JavaScript exception handling; it does not require memory64 or JSPI. It still requires Wasm SIMD and a usable WebGPU adapter/device. Asyncify adds code-size and execution overhead; applications should prefer a JSPI profile when supported and feature-detect their choice rather than use browser names. `webgpu-wasm32-jspi` requires JSPI but not memory64 and does not use Asyncify. Memory limits are build-time ceilings, not guarantees that a browser can allocate that memory or run a model of that size. Browser and device support must be checked for the chosen profile.
 
 ## Test
 
@@ -85,7 +87,7 @@ The generated model is a small, deterministic, untrained GGUF fixture. Its purpo
 
 Source branches contain the pinned llama.cpp submodule and build tooling. The `artifacts` branch contains only the installable runtime, types, schemas, manifest, and license notices.
 
-GitHub Actions builds on pushes outside `artifacts` and `artifacts/**`. It runs host tests and builds the four profiles on separate runners. After all succeed, one assembly job runs Chromium smoke tests for the two CPU profiles and verifies the combined package before publishing an append-only artifact commit. Only the publication job has repository write permission. Repository rules must permit that job to update the artifact branch.
+GitHub Actions builds on pushes outside `artifacts` and `artifacts/**`. It runs host tests and builds the five profiles on separate runners. After all succeed, one assembly job runs Chromium smoke tests for the two CPU profiles, checks wasm32 JSPI suspension with a mocked unavailable GPU adapter, and verifies the combined package before publishing an append-only artifact commit. Only the publication job has repository write permission. Repository rules must permit that job to update the artifact branch.
 
 The artifact branch tip is the most recently published result, not necessarily a build from `main`. Consumers should pin the complete artifact commit and commit their lockfile. See the [distribution contract](docs/distribution.md).
 
@@ -95,7 +97,7 @@ The C bindings generator exposes non-deprecated, non-variadic llama.cpp, GGUF, s
 
 `mountReadOnlyFile` connects synchronous range reads to the ordinary model loader without creating an additional file-wide JavaScript buffer. It does not eliminate the model's resident memory requirements or the upstream GPU loader's tensor-sized staging buffers. Bounded GPU staging and pthread profiles are not implemented. Multimodal video subprocess helpers are excluded; image/audio model execution needs separate validation, and some upstream audio paths require threads.
 
-WebGPU is experimental; the workflow compiles both GPU profiles but does not certify GPU inference on real devices. Small synthetic-model tests do not establish multi-GiB model support or broad browser compatibility.
+WebGPU is experimental; the workflow compiles all three GPU profiles but does not certify GPU inference on real devices. Small synthetic-model tests do not establish multi-GiB model support or broad browser compatibility.
 
 ## License
 

@@ -26,6 +26,12 @@ export can return while the GPU operation is still pending. Callback functions
 remain synchronous. The 32-bit profile's linear-memory ceiling is 4 GiB; actual
 model capacity also depends on device limits and native staging allocations.
 
+`webgpu-wasm32-jspi` uses the same 4 GiB linear-memory ceiling without requiring
+memory64. It requires JSPI instead of Asyncify; its Promise exports use the same
+default `attachCore` path as `webgpu-wasm64-jspi`. Normalized `lcb_` pointer and
+64-bit arguments remain `bigint` on both pointer widths. The application selects
+an explicit profile after checking capabilities; the example performs no fallback.
+
 Alternatively import `llama-cpp-browser-core/profiles/cpu-wasm32/core.mjs` directly.
 Its Embind chat types and C exports work without these helpers. See the artifact's
 [native binding guide](../../chat-and-multimodal.md) for ownership and limitations.

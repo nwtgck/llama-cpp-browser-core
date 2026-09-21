@@ -31,6 +31,11 @@ The native core reports structure sizes, alignments, and field offsets. Do not t
 
 Every reference `core.api` function returns a Promise, including CPU functions. This gives JSPI and Asyncify WebGPU calls the same interface; it does not move synchronous CPU work to another thread. Overlapping calls through that wrapper are rejected. Applications provide sequencing across all C and Embind calls; direct native calls bypass the reference wrapper's checks.
 
+Both `webgpu-wasm32-jspi` and `webgpu-wasm64-jspi` expose JSPI Promise exports
+through the default reference wrapper. The wasm32 variant needs no memory64 and
+has a 4 GiB linear-memory ceiling. Its normalized pointer and 64-bit arguments
+still use `bigint`; pointer width does not select a different binding ABI.
+
 With `webgpu-wasm32-asyncify`, the reference loader uses Emscripten's
 `ccall(name, returnType, argumentTypes, arguments, { async: true })`. Raw Asyncify
 exports can return before a GPU operation finishes; merely awaiting that return

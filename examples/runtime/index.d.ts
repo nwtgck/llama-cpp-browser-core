@@ -1,5 +1,5 @@
 import type { LowLevelFunctions } from '../../api/functions.js';
-export type Profile = 'cpu-wasm32' | 'cpu-wasm64' | 'webgpu-wasm32-asyncify' | 'webgpu-wasm64-jspi';
+export type Profile = 'cpu-wasm32' | 'cpu-wasm64' | 'webgpu-wasm32-asyncify' | 'webgpu-wasm32-jspi' | 'webgpu-wasm64-jspi';
 export interface CoreModule {
   HEAPU8: Uint8Array;
   FS: any;

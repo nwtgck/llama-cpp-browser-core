@@ -1,4 +1,4 @@
-/** CI-only browser execution of the real compiled CPU profiles. */
+/** CI-only CPU inference and wasm32 JSPI suspension with real compiled profiles. */
 import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
@@ -28,6 +28,50 @@ const browser = await chromium.launch({ headless: true });
 const results = [];
 try {
   const url = `http://127.0.0.1:${server.address().port}`;
+  // Exercise the shipped wasm32 JSPI loader and bigint ABI through a real
+  // suspension. A mocked missing adapter requires no physical GPU and does not
+  // establish WebGPU inference or production-model support.
+  const jspiPage = await browser.newPage();
+  await jspiPage.goto(url);
+  const jspiResult = await jspiPage.evaluate(async () => {
+    if (typeof WebAssembly.Suspending !== 'function' || typeof WebAssembly.promising !== 'function') {
+      throw new Error('The CI browser must support JSPI');
+    }
+    let adapterRequests = 0;
+    Object.defineProperty(navigator, 'gpu', {
+      configurable: true,
+      value: { requestAdapter: async () => {
+        adapterRequests++;
+        await new Promise(resolve => setTimeout(resolve, 0));
+        return null;
+      } },
+    });
+    const failures = [];
+    addEventListener('unhandledrejection', event => failures.push(String(event.reason)));
+    const { createCore } = await import('/examples/runtime/index.mjs');
+    const profile = 'webgpu-wasm32-jspi';
+    const core = await createCore({ profile, moduleOptions: { print() {}, printErr() {} } });
+    if (core.pointerBytes !== 4) throw new Error('Expected 32-bit pointers');
+    // Keep this first: backend registry initialization must reach requestAdapter.
+    const pending = core.api.ggml_backend_init_by_type(core.constant('GGML_BACKEND_DEVICE_TYPE_GPU'), 0n);
+    if (!core.busy) throw new Error('The wrapper released the pending JSPI call');
+    let timer;
+    try {
+      const backend = await Promise.race([
+        pending,
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error('JSPI suspension did not finish')), 5000);
+        }),
+      ]);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      if (adapterRequests !== 1 || backend !== 0n || core.busy || failures.length) {
+        throw new Error(`Invalid JSPI completion: ${JSON.stringify({ adapterRequests, backend: String(backend), busy: core.busy, failures })}`);
+      }
+      return { profile, pointerBytes: core.pointerBytes, adapterRequests, mockedAdapter: true, jspiSuspension: true };
+    } finally { clearTimeout(timer); }
+  });
+  console.log(JSON.stringify(jspiResult));
+  await jspiPage.close();
   for (const profile of ['cpu-wasm32', 'cpu-wasm64']) {
     const page = await browser.newPage();
     page.on('console', msg => { if (msg.type() === 'error') console.error(msg.text()); });

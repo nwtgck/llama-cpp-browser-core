@@ -26,6 +26,7 @@ class ProfileConfiguration(unittest.TestCase):
             'cpu-wasm32': ('OFF', 'OFF', 'OFF', 'OFF', '4294967296'),
             'cpu-wasm64': ('ON', 'OFF', 'OFF', 'OFF', '17179869184'),
             'webgpu-wasm32-asyncify': ('OFF', 'ON', 'OFF', 'ON', '4294967296'),
+            'webgpu-wasm32-jspi': ('OFF', 'ON', 'ON', 'OFF', '4294967296'),
             'webgpu-wasm64-jspi': ('ON', 'ON', 'ON', 'OFF', '17179869184'),
         }
         self.assertEqual(set(profiles), set(expected))

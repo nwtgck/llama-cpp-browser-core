@@ -108,6 +108,27 @@ test('Asyncify retains the guard until ccall completes and preserves normalized 
   assert.equal(core.busy, false);
 });
 
+test('wasm32 JSPI awaits the export Promise and retains bigint arguments without ccall', async () => {
+  const { module, schema } = fixture();
+  let finish;
+  module._lcb_pointer_bytes = () => 4;
+  module._lcb_llama_echo = pointer => {
+    assert.equal(pointer, 20n);
+    return new Promise(resolve => { finish = resolve; });
+  };
+  module.ccall = () => { throw Error('JSPI uses the native Promise export'); };
+  const core = attachCore(module, schema);
+  assert.equal(core.pointerBytes, 4);
+  await assert.rejects(core.api.llama_echo(20), /bigint/);
+  const pending = core.api.llama_echo(20n);
+  assert.equal(core.busy, true);
+  await assert.rejects(core.api.llama_echo(20n), /serialize/);
+  assert.throws(() => core.free(64n), /serialize/);
+  finish(23n);
+  assert.equal(await pending, 23n);
+  assert.equal(core.busy, false);
+});
+
 test('Asyncify uses return storage for records and releases the guard after failure', async () => {
   const { module, schema } = fixture();
   const recordSchema = { ...schema, functions: [
