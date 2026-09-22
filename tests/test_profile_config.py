@@ -66,6 +66,7 @@ class ProfileConfiguration(unittest.TestCase):
                         build.main()
                         command = run.call_args_list[0].args[0]
                         self.assertIn(f'-DLCB_VARIANT={variant}', command)
+                        self.assertIn('-DLCB_WEBGPU_BF16_PROJECTOR='+('ON' if values[1]=='ON' else 'OFF'), command)
                         names = ('MEMORY64', 'WEBGPU', 'JSPI', 'ASYNCIFY', 'MAXIMUM_MEMORY')
                         for name, value in zip(names, values):
                             self.assertIn(f'-DLCB_{name}={value}', command)

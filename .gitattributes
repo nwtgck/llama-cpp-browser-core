@@ -1,2 +1,5 @@
 * text=auto eol=lf
 *.wasm binary
+
+# Unified diffs contain space-prefixed empty context lines.
+patches/*.patch whitespace=-blank-at-eol

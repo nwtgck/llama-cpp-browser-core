@@ -9,6 +9,9 @@ set(LCB_LLAMA_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/vendor/llama.cpp" CACHE PATH "
 option(LCB_NATIVE_CHECK "Build a native shared library for boundary tests, not a distribution runtime" OFF)
 option(LCB_MEMORY64 "Use 64-bit WebAssembly memory" OFF)
 option(LCB_WEBGPU "Link the WebGPU backend" OFF)
+# Compatibility workaround for the pinned backend, not a new BF16 kernel.
+# See docs/webgpu-bf16-projector.md for memory/precision costs and removal criteria.
+option(LCB_WEBGPU_BF16_PROJECTOR "Expand vision BF16 weights to F32 for the pinned WebGPU backend" ON)
 option(LCB_JSPI "Suspend WebGPU calls with JSPI" ${LCB_WEBGPU})
 option(LCB_ASYNCIFY "Suspend WebGPU calls with Asyncify" OFF)
 set(LCB_MAXIMUM_MEMORY "4294967296" CACHE STRING "Maximum WebAssembly linear memory in bytes")
@@ -91,6 +94,10 @@ set(GGML_WEBGPU ${LCB_WEBGPU} CACHE BOOL "" FORCE)
 set(GGML_WEBGPU_JSPI ${LCB_JSPI} CACHE BOOL "" FORCE)
 set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
 add_subdirectory("${LCB_LLAMA_SOURCE}" "llama")
+
+if(LCB_WEBGPU AND LCB_WEBGPU_BF16_PROJECTOR)
+    include(cmake/MtmdOverlay.cmake)
+endif()
 
 if(EMSCRIPTEN AND LCB_ASYNCIFY)
     # The pinned backend misspells -fexceptions as -exceptions in its link interface.

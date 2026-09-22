@@ -28,6 +28,11 @@ jobs:
         run: |
           npm test
           python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Test bounded BF16 weight expansion with native GGML
+        run: |
+          cmake -S tests/mtmd-bf16 -B build/mtmd-bf16-tests -DLCB_LLAMA_SOURCE="$PWD/vendor/llama.cpp"
+          cmake --build build/mtmd-bf16-tests --target mtmd-bf16-test --parallel 2
+          build/mtmd-bf16-tests/mtmd-bf16-test
   compile:
     name: Build ${{ matrix.profile }} / ${{ matrix.variant }}
     if: github.ref_type == 'branch' && github.ref_name != 'artifacts' && !startsWith(github.ref_name, 'artifacts/')
