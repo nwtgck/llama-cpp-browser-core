@@ -11,7 +11,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def prepare(source: Path, output: Path, patch: Path) -> Path:
+def prepare(source: Path, output: Path, patch: Path, *, capture_output: bool = False) -> Path:
     # Resolve symlinks before checking overlap so a build path cannot disguise
     # a write inside the pinned checkout (or replace one of its ancestors).
     source = source.resolve()
@@ -28,7 +28,8 @@ def prepare(source: Path, output: Path, patch: Path) -> Path:
         # can be nested in the lcore repository. Never patch the repository root.
         for args in (["--check"], []):
             subprocess.run(["git", "apply", "--no-index", "--whitespace=error", *args,
-                            str(patch.resolve())], cwd=work, check=True)
+                            str(patch.resolve())], cwd=work, check=True,
+                           capture_output=capture_output, text=capture_output)
         destination = output / "clip.cpp"
         patched = (work / "clip.cpp").read_bytes()
         # Publish only after successful application, leaving the previous copy
