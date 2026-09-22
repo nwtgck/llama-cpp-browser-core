@@ -5,7 +5,7 @@
     "sourceSha256": "b32ed147daafc5406faf23d1dee1410c2ae2b78b6b68f0e1b0c425f812970e1b",
     "patchedSha256": "5722ee92c126e28d71595e3524ee1ba411fd90bc5a5ad55010f57df690de66d5"
   },
-  "llamaCommit": "3057bb66c86c46d5781e50e85462a760ba7d1feb",
+  "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
   "nodeVersion": "22.16.0",
   "artifactBranch": "artifacts",
   "dawnTag": "v20260908.214631",

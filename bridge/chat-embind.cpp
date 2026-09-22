@@ -201,7 +201,11 @@ EMSCRIPTEN_BINDINGS(llama_common_chat) {
     function("common_chat_format_name", +[](common_chat_format format) { return std::string(common_chat_format_name(format)); });
     function("common_reasoning_format_name", +[](common_reasoning_format format) { return std::string(common_reasoning_format_name(format)); });
     function("common_reasoning_format_from_name", &common_reasoning_format_from_name);
-    function("json_schema_to_grammar", &json_schema_to_grammar);
+    // Upstream also overloads this name for common_chat_schema_document (v0.4.1).
+    // Keep the existing JSON + force_gbnf binding; an unqualified address is
+    // ambiguous to Embind's function template once that overload is present.
+    function("json_schema_to_grammar",
+        select_overload<std::string(const common_json &, bool)>(&json_schema_to_grammar));
     function("common_reasoning_budget_init", +[](uint64_t vocab, const std::vector<llama_tokens> & starts,
         const std::vector<llama_tokens> & ends, const llama_tokens & forced, int32_t budget, common_reasoning_budget_state initial) {
         return address(common_reasoning_budget_init(pointer<const llama_vocab>(vocab), starts, ends, forced, budget, initial));
