@@ -33,13 +33,18 @@ def payload(head=A):
     return f'## Runtime artifact published\n\nSource: {head}\n\nnpm install github:{REPO}#{C}\n\n<details>\n<summary>Metadata</summary>\n\n```yaml\nfixture: true\n```\n\n</details>\n'
 
 
-def archive_for(workflow_run, changes=None, extras=None, body=None):
+_DEFAULT_ENVELOPE = object()
+
+
+def archive_for(workflow_run, changes=None, extras=None, body=None, envelope=_DEFAULT_ENVELOPE):
     body = body if body is not None else payload(workflow_run['head_sha'])
     encoded = body.encode('utf-8')
-    envelope = {'schemaVersion': 1, 'repository': REPO, 'sourceCommit': workflow_run['head_sha'],
-                'artifactCommit': C, 'runId': workflow_run['id'], 'runAttempt': workflow_run['run_attempt'],
-                'markdownSha256': hashlib.sha256(encoded).hexdigest()}
-    envelope.update(changes or {})
+    fields = {'schemaVersion': 1, 'repository': REPO, 'sourceCommit': workflow_run['head_sha'],
+              'artifactCommit': C, 'runId': workflow_run['id'], 'runAttempt': workflow_run['run_attempt'],
+              'markdownSha256': hashlib.sha256(encoded).hexdigest()}
+    fields.update(changes or {})
+    if envelope is _DEFAULT_ENVELOPE:
+        envelope = fields
     output = io.BytesIO()
     with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr('report.json', json.dumps(envelope))
@@ -121,6 +126,21 @@ class ReportDecoder(unittest.TestCase):
         for change in [{'repository': 'fork/core'}, {'sourceCommit': B}, {'runId': 124},
                        {'runAttempt': 2}, {'schemaVersion': 2}, {'artifactCommit': 'moving-branch'},
                        {'markdownSha256': '0' * 64}]:
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                comments.decode_report(archive_for(run(), change), REPO, run())
+
+    def test_non_object_envelope_is_a_validation_error(self):
+        for invalid in (None, [], 'invalid', 1):
+            with self.subTest(envelope=invalid), self.assertRaisesRegex(ValueError, 'object'):
+                comments.decode_report(archive_for(run(), envelope=invalid), REPO, run())
+
+    def test_envelope_fields_require_their_declared_types(self):
+        # Python otherwise treats True == 1 and 123.0 == 123 as equal.
+        changes = [{'schemaVersion': True}, {'schemaVersion': 1.0},
+                   {'runId': 123.0}, {'runId': '123'}, {'runAttempt': True},
+                   {'runAttempt': 1.0}, {'artifactCommit': None},
+                   {'sourceCommit': []}, {'markdownSha256': 123}]
+        for change in changes:
             with self.subTest(change=change), self.assertRaises(ValueError):
                 comments.decode_report(archive_for(run(), change), REPO, run())
 
@@ -326,6 +346,24 @@ class CommentReconciliation(unittest.TestCase):
         again = comments.comment_body(pr(B), run(B, status='in_progress'), None, pending)
         self.assertEqual(again.count('Previous successful publication'), 1)
         self.assertEqual(again.count(comments.START), 1)
+
+    def test_malformed_report_does_not_abort_other_prs_or_erase_previous_metadata(self):
+        previous = comments.comment_body(pr(), run(), payload())
+        next_run = run(head=B, id=124)
+        api = FakeApi(pull_requests=[pr(number=7), pr(head=B, number=8)],
+                      runs=[run(), next_run], existing=[bot_comment(previous)])
+        reports = [archive_for(run(), envelope=[]), archive_for(next_run)]
+        with patch.object(api, 'download_artifact_archive', side_effect=reports):
+            self.assertEqual(comments.reconcile(api, REPO), 2)
+        unavailable = api.writes[0][2]['body']
+        self.assertIn('unavailable', unavailable)
+        self.assertIn('Report retrieval error:', unavailable)
+        self.assertIn('not confirmation of the current head/run', unavailable)
+        self.assertNotIn('succeeded for this PR head', unavailable)
+        recovered = api.writes[1][2]['body']
+        self.assertIn('succeeded for this PR head', recovered)
+        self.assertIn(B, recovered)
+        self.assertNotIn('Report retrieval error:', recovered)
 
     def test_reconciliation_handles_more_than_the_triggering_pr(self):
         api = FakeApi(pull_requests=[pr(number=7), pr(number=8)], runs=[run()])

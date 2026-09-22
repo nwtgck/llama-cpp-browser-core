@@ -18,6 +18,8 @@ on:
         type: boolean
         default: false
 
+# Read-only defaults for jobs without their own permissions. This is not a cap:
+# jobs.update.permissions overrides it with the write access needed for git push.
 permissions:
   contents: read
 
@@ -26,6 +28,8 @@ jobs:
     if: github.ref_type == 'branch'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # This job needs contents: write to push the candidate branch (write includes
+    # read). It overrides the workflow default; contents: read alone cannot push.
     # Branch preparation only: no PR writes or workflow-dispatch permission.
     permissions:
       contents: write

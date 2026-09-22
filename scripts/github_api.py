@@ -21,13 +21,13 @@ class ApiError(RuntimeError):
 
 
 def full_sha(value: str) -> str:
-    if not re.fullmatch(r'[0-9a-f]{40}', value):
+    if not isinstance(value, str) or not re.fullmatch(r'[0-9a-f]{40}', value):
         raise ValueError('Expected a full lowercase Git commit SHA')
     return value
 
 
 def repository_name(value: str) -> str:
-    if (not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', value)
+    if (not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', value)
             or any(part in ('.', '..') for part in value.split('/'))):
         raise ValueError('Expected owner/repository')
     return value
@@ -61,7 +61,8 @@ class GitHub:
     def get_ref(self, repository: str, ref: str) -> dict:
         # Only named tag/branch refs are used here. Encoding prevents ref text
         # from changing the endpoint or introducing query parameters.
-        if not ref.startswith(('tags/', 'heads/')) or any(part in ('', '.', '..') for part in ref.split('/')):
+        if (not isinstance(ref, str) or not ref.startswith(('tags/', 'heads/'))
+                or any(part in ('', '.', '..') for part in ref.split('/'))):
             raise ValueError('Expected a tags/... or heads/... ref')
         return self._request('GET', f'/repos/{repository_name(repository)}/git/ref/{quote(ref, safe="/")}')
 

@@ -91,6 +91,24 @@ class WorkflowBoundaries(unittest.TestCase):
                 self.assertEqual(result.returncode == 0, passed, result.stderr)
                 self.assertEqual(path.read_bytes(), original)
 
+    def test_updater_write_permission_overrides_only_the_update_job(self):
+        # Scope matters: merely finding "contents: write" somewhere in a
+        # workflow would not prove that the branch-pushing job receives it.
+        defaults, jobs = self.update.split('\njobs:\n', 1)
+        self.assertRegex(defaults, r'(?m)^permissions:\n  contents: read\n')
+        self.assertNotRegex(defaults, r'(?m)^  [\w-]+: write$')
+        update_job = jobs.split('  update:\n', 1)[1]
+        self.assertRegex(update_job, r'(?m)^    permissions:\n      contents: write\n    steps:')
+        self.assertEqual(self.update.count('\n    permissions:\n'), 1)
+        self.assertNotRegex(self.update, r'(?m)^\s+(?:actions|pull-requests): write$')
+        self.assertIn('This is not a cap:', self.update)
+        self.assertIn('contents: read alone cannot push', self.update)
+
+    def test_reporter_has_read_only_content_and_actions_with_comment_writes(self):
+        defaults, jobs = self.report.split('\njobs:\n', 1)
+        self.assertRegex(defaults, r'(?m)^permissions:\n  contents: read\n  actions: read\n  pull-requests: write\n')
+        self.assertNotRegex(jobs, r'(?m)^\s+permissions:')
+
     def test_updater_inputs_are_data_not_shell_interpolation(self):
         for item in ['options: [latest, latest-unstable, custom]', 'allow_non_fast_forward:', 'contents: write']:
             self.assertIn(item, self.update)

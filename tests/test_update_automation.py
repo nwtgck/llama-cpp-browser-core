@@ -280,6 +280,50 @@ class LocalGitProposal(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'refusing to overwrite'):
             self.propose()
 
+    def test_reused_branch_validates_the_fetched_tip_when_it_moves_during_fetch(self):
+        # ls-remote and fetch are separate reads. A human can advance the branch
+        # between them; the fetched commit is the snapshot available for review.
+        first = self.propose()
+        config = self.root / 'config/toolchain.json'
+        config.write_text(json.dumps({'llamaCommit': A}))
+        self.git('add', '.', cwd=self.root)
+        self.git('commit', '-qm', 'Human switches target during fetch', cwd=self.root)
+        changed = self.git('rev-parse', 'HEAD', cwd=self.root)
+        self.restore_base()
+        local_git = update.git.side_effect
+
+        def advance_before_fetch(*args, **kwargs):
+            if args[0] == 'fetch' and 'https://github.com/example/core.git' in args:
+                self.git('push', str(self.remote), changed + ':refs/heads/' + first['branch'], cwd=self.root)
+            return local_git(*args, **kwargs)
+
+        with patch.object(update, 'git', side_effect=advance_before_fetch):
+            with self.assertRaisesRegex(ValueError, 'refusing to overwrite'):
+                self.propose()
+        self.assertEqual(self.git('rev-parse', 'HEAD', cwd=self.root), self.base)
+        remote_head = self.git('ls-remote', str(self.remote), 'refs/heads/' + first['branch'], cwd=self.home)
+        self.assertEqual(remote_head.split()[0], changed)
+
+    def test_reused_branch_reports_a_human_repair_fetched_after_the_remote_probe(self):
+        first = self.propose()
+        (self.root / 'manual-repair').write_text('human repair during fetch\n')
+        self.git('add', '.', cwd=self.root)
+        self.git('commit', '-qm', 'Human repairs during fetch', cwd=self.root)
+        repair = self.git('rev-parse', 'HEAD', cwd=self.root)
+        self.restore_base()
+        local_git = update.git.side_effect
+
+        def advance_before_fetch(*args, **kwargs):
+            if args[0] == 'fetch' and 'https://github.com/example/core.git' in args:
+                self.git('push', str(self.remote), repair + ':refs/heads/' + first['branch'], cwd=self.root)
+            return local_git(*args, **kwargs)
+
+        with patch.object(update, 'git', side_effect=advance_before_fetch) as calls:
+            result = self.propose()
+            self.assertNotIn('push', [call.args[0] for call in calls.call_args_list])
+        self.assertEqual(result['sourceCommit'], repair)
+        self.assertEqual(result['status'], 'branch-exists')
+
     def test_existing_branch_needs_no_pr_read_or_write_permission(self):
         first = self.propose()
         self.restore_base()

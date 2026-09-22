@@ -60,8 +60,14 @@ Repository/organization rules must permit creation of the
 existing artifact publisher. **Allow GitHub Actions to create and approve pull
 requests is not required**: the updater does not create or approve PRs.
 
-The updater requests only `contents: write` (for upstream reads and branch push),
-not `actions: write` or `pull-requests: write`. In the build workflow only the
+The updater workflow defaults to `contents: read`, but its **update job overrides
+that default with `contents: write`** for branch push. Workflow-level permissions
+are defaults, not an upper bound on a job's explicit permissions; `write` includes
+`read`. Changing only the job to `contents: read` would prevent candidate pushes.
+The workflow does not need `actions: write` or `pull-requests: write`, and there is
+no reason to grant write access to every job by changing the workflow default.
+Repository rules can still deny a push despite the job's requested permissions.
+In the build workflow only the
 publisher has content writes. The reporter separately needs content/action reads
 and PR-comment writes. No personal access token, GitHub App, auto-approval or
 auto-merge is introduced. Fork PRs can run the read-only build/test jobs, but
@@ -119,7 +125,12 @@ upstream target commit. A rerun reuses an existing candidate and preserves any
 manual repair commits on that branch. It never rebases or force-pushes. Different
 pins on an existing candidate are rejected. A changed base commit produces a new
 candidate rather than overwriting an earlier one. Concurrent conflicting branch
-creation fails safely and can be rerun.
+creation fails safely and can be rerun. Branch existence is probed before fetch;
+validation and the reported source commit use the actual fetched `FETCH_HEAD`.
+A human commit made between those two reads is therefore included in that
+snapshot, and changed pins are rejected rather than validated against an older
+probe result. The branch can still advance after fetch; the reported commit is
+an immutable observation, not a lock on the remote branch.
 
 An existing candidate is read and validated, **not pushed again**. Its PRs are
 not queried, created, reopened, edited, or closed; their lifecycle belongs to the
@@ -254,8 +265,13 @@ is immediately visible; the single English YAML block is inside `<details>`.
 The reporter operates on default-branch code, never PR-head code. It does not
 install PR dependencies, evaluate YAML, execute uploaded scripts, or extract an
 archive into its checkout. Only a bounded archive containing three named report
-files is read in memory. The envelope must match the repository, run ID, rerun
-attempt and source SHA. Download redirects receive no GitHub authorization header.
+files is read in memory. The envelope must be a JSON object with strictly typed
+positive integer schema/run/attempt fields and full commit strings, and must
+match the repository, run ID, rerun attempt and source SHA. A malformed envelope
+is an unavailable report for that PR, not an exception that aborts reconciliation
+of every later PR. Previous metadata remains labelled as historical rather than
+being promoted to current success. Download redirects receive no GitHub
+authorization header.
 Fork PRs and non-source build events are excluded from comment reconciliation.
 Same-repository `push`, `pull_request`, and human `workflow_dispatch` build runs
 are eligible. A PR run report containing a synthetic merge SHA instead of its
@@ -313,10 +329,10 @@ real GPU inference succeeded when only compile/mock checks ran.
 The new Python tests use fake API responses, bounded ZIP fixtures, npm subprocess
 fixtures and real **local** Git repositories. They cover both-pin updates,
 channel/ref validation, conflict branches, browser form links, no-op/retry behavior,
-preserved manual commits, no PR/dispatch mutations, immutable PR-head checkouts,
-publication permissions, npm lock constraints, actual overlay hashing,
-push/PR comment selection, comment freshness and
-archive safety. A YAML-parser round trip is additionally performed when PyYAML
+preserved manual commits and probe/fetch races, no PR/dispatch mutations,
+immutable PR-head checkouts, workflow defaults versus job-scoped publication
+permissions, npm lock constraints, actual overlay hashing, push/PR comment
+selection, comment freshness, strictly typed report envelopes and archive safety. A YAML-parser round trip is additionally performed when PyYAML
 is available; no third-party Python package is required by the automation.
 
 Representative focused commands:

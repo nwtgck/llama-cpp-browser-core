@@ -29,13 +29,21 @@ def decode_report(content: bytes, repository: str, run: dict) -> str:
         if any(item.file_size > 60000 or stat.S_ISLNK(item.external_attr >> 16) for item in entries):
             raise ValueError('Unsafe report archive entry')
         envelope = json.loads(archive.read('report.json'))
+        if not isinstance(envelope, dict):
+            raise ValueError('Report envelope must be an object')
+        # This JSON is workflow output, not trusted Python input. Strict integer
+        # types prevent True/1 and 123.0/123 from passing the identity checks.
+        # Validation failures stay local to this PR via reconcile's error path.
+        for key in ('schemaVersion', 'runId', 'runAttempt'):
+            if type(envelope.get(key)) is not int or envelope[key] <= 0:
+                raise ValueError(f'Report {key} must be a positive integer')
+        source = full_sha(envelope.get('sourceCommit'))
+        commit = full_sha(envelope.get('artifactCommit'))
         raw = archive.read('consumer-update.md')
         if (envelope.get('schemaVersion') != 1 or envelope.get('repository') != repository
                 or envelope.get('runId') != run['id'] or envelope.get('runAttempt') != run['run_attempt']
-                or envelope.get('sourceCommit') != run['head_sha']):
+                or source != run['head_sha']):
             raise ValueError('Report identity does not match the source workflow run')
-        full_sha(envelope['sourceCommit'])
-        commit = full_sha(envelope['artifactCommit'])
         if hashlib.sha256(raw).hexdigest() != envelope.get('markdownSha256'):
             raise ValueError('Report Markdown digest mismatch')
         text = raw.decode('utf-8')

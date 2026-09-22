@@ -188,9 +188,12 @@ def propose(root: Path, api: GitHub, repository: str, base: str, target: dict,
     if existing.returncode not in (0, 2):
         raise RuntimeError('Cannot inspect the remote update branch')
     if existing.stdout:
-        head = full_sha(existing.stdout.split()[0])
         git('fetch', '--no-tags', '--depth=1', remote, 'refs/heads/' + branch, cwd=root,
             env=git_auth_env(os.environ['GH_TOKEN']))
+        # ls-remote is only an existence probe. A human may advance the branch
+        # before fetch, so validate and report the fetched snapshot, not the
+        # potentially stale probe SHA (which might not even be fetched).
+        head = full_sha(git('rev-parse', '--verify', 'FETCH_HEAD', cwd=root).stdout.strip())
         # Only validate its pins. Any human fixes on a previous attempt survive.
         pins = json.loads(git('show', head + ':config/toolchain.json', cwd=root).stdout)
         link = git('ls-tree', head, '--', 'vendor/llama.cpp', cwd=root).stdout.split()

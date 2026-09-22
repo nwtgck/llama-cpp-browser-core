@@ -106,7 +106,7 @@ class OperationSurface(unittest.TestCase):
         self.assertNotIn('/dispatches', source)
 
     def test_repository_segments_cannot_retarget_an_endpoint(self):
-        for repository in ('owner/repo?x=y', 'owner/repo/extra', 'owner\n/repo', '../repo', 'owner/..', './repo', 'https://elsewhere'):
+        for repository in ('owner/repo?x=y', 'owner/repo/extra', 'owner\n/repo', '../repo', 'owner/..', './repo', 'https://elsewhere', None, [], 123):
             with self.subTest(repository=repository), patch.object(self.api, '_request') as request:
                 with self.assertRaises(ValueError):
                     self.api.get_latest_release(repository)
@@ -116,14 +116,14 @@ class OperationSurface(unittest.TestCase):
         with patch.object(self.api, '_request') as request:
             self.api.get_ref(REPO, 'heads/feature/a?state=all#fragment')
             request.assert_called_once_with('GET', PREFIX + '/git/ref/heads/feature/a%3Fstate%3Dall%23fragment')
-        for ref in ('refs/heads/main', 'tags/', 'heads/a/../../issues', 'heads/a//b', 'heads/./b'):
+        for ref in ('refs/heads/main', 'tags/', 'heads/a/../../issues', 'heads/a//b', 'heads/./b', None, [], 123):
             with self.subTest(ref=ref), patch.object(self.api, '_request') as request:
                 with self.assertRaises(ValueError):
                     self.api.get_ref(REPO, ref)
                 request.assert_not_called()
 
     def test_commit_operations_require_complete_lowercase_hashes(self):
-        for commit in ('abc', 'main', 'A' * 40, A + '?page=2'):
+        for commit in ('abc', 'main', 'A' * 40, A + '?page=2', None, 123, [], {}):
             with self.subTest(commit=commit), patch.object(self.api, '_request') as request:
                 for operation in (
                     lambda: self.api.get_commit(REPO, commit),
