@@ -63,8 +63,16 @@ export async function checkChatSurface(native, template) {
     const diff = own(diffs.get(0));
     check(diff.content_delta === 'lo', 'Streaming text diff failed');
     check(diff.tool_call_index === native.common_chat_no_tool_call_index(), 'Native missing-index sentinel changed');
-    const grammar = native.json_schema_to_grammar(json({ type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] }), true);
-    check(grammar.includes('root ::='), 'JSON schema grammar missing');
+    // Keep the public JSON + force_gbnf signature even when upstream adds
+    // schema-document overloads. Both calls use the same owned common_json.
+    const schema = json({ type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] });
+    const schemaBefore = schema.dump(-1);
+    for (const forceGbnf of [false, true]) {
+      const grammar = native.json_schema_to_grammar(schema, forceGbnf);
+      // This runtime disables LLGuidance, so both modes produce GBNF.
+      check(typeof grammar === 'string' && grammar.includes('root ::='), `JSON schema grammar missing (force_gbnf=${forceGbnf})`);
+      check(schema.dump(-1) === schemaBefore, 'JSON schema conversion changed the input');
+    }
     const invalid = own(native.common_json.parse_no_throw('{'));
     check(invalid.is_discarded(), 'Upstream nonthrowing JSON parse changed');
 
