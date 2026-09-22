@@ -1,6 +1,6 @@
 {
   "formatVersion": 2,
-  "sourceCommit": "e5616809b9185067d7767bed7becdc52c1a8f187",
+  "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
   "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
   "profiles": {
     "cpu-wasm32": {
@@ -20,7 +20,7 @@
             "assertions": 0,
             "environment": "web,worker"
           },
-          "sourceCommit": "e5616809b9185067d7767bed7becdc52c1a8f187",
+          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -57,7 +57,7 @@
             "-DLCB_ASYNCIFY=OFF",
             "-DLCB_MAXIMUM_MEMORY=4294967296"
           ],
-          "builtAtUnix": 1790086924,
+          "builtAtUnix": 1790090066,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -97,7 +97,7 @@
             "assertions": 1,
             "environment": "web,worker,node"
           },
-          "sourceCommit": "e5616809b9185067d7767bed7becdc52c1a8f187",
+          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -134,7 +134,7 @@
             "-DLCB_ASYNCIFY=OFF",
             "-DLCB_MAXIMUM_MEMORY=4294967296"
           ],
-          "builtAtUnix": 1790086835,
+          "builtAtUnix": 1790090134,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -178,7 +178,7 @@
             "assertions": 0,
             "environment": "web,worker"
           },
-          "sourceCommit": "e5616809b9185067d7767bed7becdc52c1a8f187",
+          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -215,7 +215,7 @@
             "-DLCB_ASYNCIFY=OFF",
             "-DLCB_MAXIMUM_MEMORY=17179869184"
           ],
-          "builtAtUnix": 1790086868,
+          "builtAtUnix": 1790090091,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -255,7 +255,7 @@
             "assertions": 1,
             "environment": "web,worker,node"
           },
-          "sourceCommit": "e5616809b9185067d7767bed7becdc52c1a8f187",
+          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -292,7 +292,7 @@
             "-DLCB_ASYNCIFY=OFF",
             "-DLCB_MAXIMUM_MEMORY=17179869184"
           ],
-          "builtAtUnix": 1790086929,
+          "builtAtUnix": 1790090164,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -336,7 +336,7 @@
             "assertions": 0,
             "environment": "web,worker"
           },
-          "sourceCommit": "e5616809b9185067d7767bed7becdc52c1a8f187",
+          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -374,7 +374,7 @@
             "-DLCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790086924,
+          "builtAtUnix": 1790090245,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -405,7 +405,7 @@
             "assertions": 1,
             "environment": "web,worker,node"
           },
-          "sourceCommit": "e5616809b9185067d7767bed7becdc52c1a8f187",
+          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -443,7 +443,7 @@
             "-DLCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790087001,
+          "builtAtUnix": 1790090258,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -478,7 +478,7 @@
             "assertions": 0,
             "environment": "web,worker"
           },
-          "sourceCommit": "e5616809b9185067d7767bed7becdc52c1a8f187",
+          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -516,7 +516,7 @@
             "-DLCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790086914,
+          "builtAtUnix": 1790090147,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -547,7 +547,7 @@
             "assertions": 1,
             "environment": "web,worker,node"
           },
-          "sourceCommit": "e5616809b9185067d7767bed7becdc52c1a8f187",
+          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -585,7 +585,7 @@
             "-DLCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790086912,
+          "builtAtUnix": 1790090129,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -620,7 +620,7 @@
             "assertions": 0,
             "environment": "web,worker"
           },
-          "sourceCommit": "e5616809b9185067d7767bed7becdc52c1a8f187",
+          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -658,7 +658,7 @@
             "-DLCB_MAXIMUM_MEMORY=17179869184",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790086941,
+          "builtAtUnix": 1790090148,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -689,7 +689,7 @@
             "assertions": 1,
             "environment": "web,worker,node"
           },
-          "sourceCommit": "e5616809b9185067d7767bed7becdc52c1a8f187",
+          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -727,7 +727,7 @@
             "-DLCB_MAXIMUM_MEMORY=17179869184",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790086930,
+          "builtAtUnix": 1790090046,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -784,8 +784,8 @@
     },
     {
       "path": "chat-and-multimodal.md",
-      "bytes": 6641,
-      "sha256": "2488f8e8812f85f7e46a31c7c5f88f7f9e0adaea3e40ce8d8f8c3855eec8b638"
+      "bytes": 10473,
+      "sha256": "2991ca28c437e5cc0e51378e22c8af34e01d1c126c96cedccba0c190dc2df278"
     },
     {
       "path": "examples/runtime/README.md",
