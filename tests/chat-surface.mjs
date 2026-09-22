@@ -6,6 +6,18 @@ export async function checkChatSurface(native, template) {
   const json = value => own(native.common_json.parse(JSON.stringify(value)));
   const toJS = value => JSON.parse(value.dump(-1));
   try {
+    // Exercise static and const-member bindings as well as the JSON grammar
+    // free function below. Explicit native signatures must preserve the API.
+    const emptyJSON = own(new native.common_json());
+    const emptyArray = own(native.common_json.array());
+    const emptyObject = own(native.common_json.object());
+    check(emptyJSON.is_null(), 'Default JSON null changed');
+    check(emptyArray.is_array() && Number(emptyArray.size()) === 0, 'JSON array factory changed');
+    check(emptyObject.is_object() && Number(emptyObject.size()) === 0, 'JSON object factory changed');
+    const textMessage = own(new native.common_chat_msg());
+    check(textMessage.empty() && !textMessage.contains_media(), 'Default message predicates changed');
+    textMessage.content = 'typed member';
+    check(!textMessage.empty() && textMessage.render_content('|') === 'typed member', 'Message member binding changed');
     const templates = own(new native.common_chat_templates(0n, template, '', ''));
     check(templates.was_explicit(), 'Template override lost');
     const caps = own(templates.get_caps());
@@ -36,6 +48,7 @@ export async function checkChatSurface(native, template) {
     const parserParams = own(new native.common_chat_parser_params(params));
     parserParams.reasoning_format = native.common_reasoning_format.COMMON_REASONING_FORMAT_AUTO;
     const arena = own(new native.common_peg_arena());
+    check(arena.empty() && Number(arena.size()) === 0, 'Default arena predicates changed');
     arena.load(params.parser);
     const generated = '<tool_call>\n{"name":"lookup","arguments":{"city":"Tokyo"}}\n</tool_call>';
     const parsed = own(native.common_chat_peg_parse(arena, generated, false, parserParams));
@@ -46,6 +59,9 @@ export async function checkChatSurface(native, template) {
     restored.load(arena.save());
     const again = own(native.common_chat_peg_parse(restored, generated, false, parserParams));
     check(own(again.to_json_oaicompat(false)).dump(-1) === own(parsed.to_json_oaicompat(false)).dump(-1), 'Saved parser changed result');
+    const jsonRestored = own(native.common_peg_arena.from_json(own(arena.to_json())));
+    const fromJSON = own(native.common_chat_peg_parse(jsonRestored, generated, false, parserParams));
+    check(own(fromJSON.to_json_oaicompat(false)).dump(-1) === own(parsed.to_json_oaicompat(false)).dump(-1), 'JSON-restored parser changed result');
     own(native.common_chat_peg_parse(arena, generated.slice(0, -5), true, parserParams));
     // Assignment copies an arena once; repeated parse calls then reuse the native member.
     parserParams.parser = arena;

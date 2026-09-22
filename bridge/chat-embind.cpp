@@ -33,6 +33,16 @@ struct templates_owner {
 EMSCRIPTEN_BINDINGS(llama_common_chat) {
     using namespace emscripten;
 
+    // Select the full signature of every directly registered named callable,
+    // including static functions and const/non-const methods. A future upstream
+    // overload must not make deduction ambiguous or change our JavaScript API.
+    // Keep these explicit even when the name currently has only one overload;
+    // a removed/changed signature should fail compilation, not bind a substitute.
+    // Member selectors also name the owning class: leaving ClassType deduced can
+    // become ambiguous when upstream adds a same-name member function template.
+    // Typed adapter lambdas below still handle pointer/ownership conversions.
+    // Fields and typed constructors do not pass unresolved function addresses.
+
     enum_<common_chat_role>("common_chat_role")
         VALUE(COMMON_CHAT_ROLE_UNKNOWN) VALUE(COMMON_CHAT_ROLE_SYSTEM)
         VALUE(COMMON_CHAT_ROLE_ASSISTANT) VALUE(COMMON_CHAT_ROLE_USER) VALUE(COMMON_CHAT_ROLE_TOOL);
@@ -73,29 +83,29 @@ EMSCRIPTEN_BINDINGS(llama_common_chat) {
 
     class_<common_json>("common_json")
         .constructor<>()
-        .class_function("parse", &common_json::parse)
-        .class_function("parse_no_throw", &common_json::parse_no_throw)
+        .class_function("parse", select_overload<common_json(const std::string &)>(&common_json::parse))
+        .class_function("parse_no_throw", select_overload<common_json(const std::string &)>(&common_json::parse_no_throw))
         .class_function("array", select_overload<common_json()>(&common_json::array))
         .class_function("object", select_overload<common_json()>(&common_json::object))
-        .function("dump", &common_json::dump)
-        .function("is_discarded", &common_json::is_discarded)
-        .function("is_null", &common_json::is_null)
-        .function("is_object", &common_json::is_object)
-        .function("is_array", &common_json::is_array)
-        .function("size", &common_json::size);
+        .function("dump", select_overload<std::string(int) const, common_json>(&common_json::dump))
+        .function("is_discarded", select_overload<bool() const, common_json>(&common_json::is_discarded))
+        .function("is_null", select_overload<bool() const, common_json>(&common_json::is_null))
+        .function("is_object", select_overload<bool() const, common_json>(&common_json::is_object))
+        .function("is_array", select_overload<bool() const, common_json>(&common_json::is_array))
+        .function("size", select_overload<size_t() const, common_json>(&common_json::size));
 
     using clock = std::chrono::system_clock;
     class_<clock::duration>("system_clock_duration")
         .constructor<>()
         .constructor<clock::duration::rep>()
-        .function("count", &clock::duration::count);
+        .function("count", select_overload<clock::duration::rep() const, clock::duration>(&clock::duration::count));
     class_<clock::time_point>("system_clock_time_point")
         .constructor<>()
         .constructor<clock::duration>()
-        .function("time_since_epoch", &clock::time_point::time_since_epoch);
+        .function("time_since_epoch", select_overload<clock::duration() const, clock::time_point>(&clock::time_point::time_since_epoch));
     function("system_clock_period_num", +[]() -> int64_t { return clock::period::num; });
     function("system_clock_period_den", +[]() -> int64_t { return clock::period::den; });
-    function("system_clock_now", &clock::now);
+    function("system_clock_now", select_overload<clock::time_point()>(&clock::now));
 
     class_<common_chat_tool_call>("common_chat_tool_call").constructor<>()
         FIELD(common_chat_tool_call, name) FIELD(common_chat_tool_call, arguments) FIELD(common_chat_tool_call, id);
@@ -105,35 +115,37 @@ EMSCRIPTEN_BINDINGS(llama_common_chat) {
         FIELD(common_chat_msg, role) FIELD(common_chat_msg, content) FIELD(common_chat_msg, content_parts)
         FIELD(common_chat_msg, tool_calls) FIELD(common_chat_msg, reasoning_content)
         FIELD(common_chat_msg, tool_name) FIELD(common_chat_msg, tool_call_id)
-        .function("to_json_oaicompat", &common_chat_msg::to_json_oaicompat)
-        .function("render_content", &common_chat_msg::render_content)
-        .function("empty", &common_chat_msg::empty)
-        .function("contains_media", &common_chat_msg::contains_media);
+        .function("to_json_oaicompat", select_overload<common_json(bool) const, common_chat_msg>(&common_chat_msg::to_json_oaicompat))
+        .function("render_content", select_overload<std::string(const std::string &) const, common_chat_msg>(&common_chat_msg::render_content))
+        .function("empty", select_overload<bool() const, common_chat_msg>(&common_chat_msg::empty))
+        .function("contains_media", select_overload<bool() const, common_chat_msg>(&common_chat_msg::contains_media));
     class_<common_chat_tool>("common_chat_tool").constructor<>()
         FIELD(common_chat_tool, name) FIELD(common_chat_tool, description) FIELD(common_chat_tool, parameters);
     class_<common_chat_msg_diff>("common_chat_msg_diff").constructor<>()
         FIELD(common_chat_msg_diff, reasoning_content_delta) FIELD(common_chat_msg_diff, content_delta)
         FIELD(common_chat_msg_diff, tool_call_index) FIELD(common_chat_msg_diff, tool_call_delta)
-        .class_function("compute_diffs", &common_chat_msg_diff::compute_diffs);
+        .class_function("compute_diffs",
+            select_overload<std::vector<common_chat_msg_diff>(const common_chat_msg &, const common_chat_msg &)>(&common_chat_msg_diff::compute_diffs));
     function("common_chat_no_tool_call_index", +[]() -> size_t { return std::string::npos; });
     class_<common_grammar_trigger>("common_grammar_trigger").constructor<>()
         FIELD(common_grammar_trigger, type) FIELD(common_grammar_trigger, value) FIELD(common_grammar_trigger, token);
     class_<common_chat_msg_span>("common_chat_msg_span").constructor<>()
         FIELD(common_chat_msg_span, role) FIELD(common_chat_msg_span, pos) FIELD(common_chat_msg_span, len)
-        .function("valid", &common_chat_msg_span::valid);
+        .function("valid", select_overload<bool() const, common_chat_msg_span>(&common_chat_msg_span::valid));
     class_<common_chat_msg_spans>("common_chat_msg_spans").constructor<>()
         FIELD(common_chat_msg_spans, spans)
-        .function("add", &common_chat_msg_spans::add)
-        .function("is_user_start", &common_chat_msg_spans::is_user_start)
-        .function("last_user_message_pos", &common_chat_msg_spans::last_user_message_pos);
+        .function("add", select_overload<void(common_chat_role, size_t, size_t), common_chat_msg_spans>(&common_chat_msg_spans::add))
+        .function("is_user_start", select_overload<bool(int32_t) const, common_chat_msg_spans>(&common_chat_msg_spans::is_user_start))
+        .function("last_user_message_pos", select_overload<int32_t() const, common_chat_msg_spans>(&common_chat_msg_spans::last_user_message_pos));
     class_<common_chat_msg_delimiter>("common_chat_msg_delimiter").constructor<>()
         FIELD(common_chat_msg_delimiter, role) FIELD(common_chat_msg_delimiter, delimiter) FIELD(common_chat_msg_delimiter, tokens);
     class_<common_chat_msg_delimiters>("common_chat_msg_delimiters").constructor<>()
         FIELD(common_chat_msg_delimiters, delimiters)
-        .function("add", &common_chat_msg_delimiters::add)
+        .function("add", select_overload<void(common_chat_role, const std::string &), common_chat_msg_delimiters>(&common_chat_msg_delimiters::add))
         .function("tokenize", +[](common_chat_msg_delimiters & self, uint64_t vocab) { self.tokenize(pointer<const llama_vocab>(vocab)); })
-        .function("split", &common_chat_msg_delimiters::split)
-        .function("to_json", &common_chat_msg_delimiters::to_json);
+        .function("split",
+            select_overload<common_chat_msg_spans(const llama_tokens &, const std::map<size_t, size_t> &) const, common_chat_msg_delimiters>(&common_chat_msg_delimiters::split))
+        .function("to_json", select_overload<common_json() const, common_chat_msg_delimiters>(&common_chat_msg_delimiters::to_json));
     class_<common_chat_templates_inputs>("common_chat_templates_inputs").constructor<>()
         FIELD(common_chat_templates_inputs, messages) FIELD(common_chat_templates_inputs, grammar)
         FIELD(common_chat_templates_inputs, json_schema) FIELD(common_chat_templates_inputs, add_generation_prompt)
@@ -159,12 +171,12 @@ EMSCRIPTEN_BINDINGS(llama_common_chat) {
     class_<common_chat_prompt_preset>("common_chat_prompt_preset").constructor<>()
         FIELD(common_chat_prompt_preset, system) FIELD(common_chat_prompt_preset, user);
     class_<common_peg_arena>("common_peg_arena").constructor<>()
-        .function("load", &common_peg_arena::load)
-        .function("save", &common_peg_arena::save)
-        .function("empty", &common_peg_arena::empty)
-        .function("size", &common_peg_arena::size)
-        .function("to_json", &common_peg_arena::to_json)
-        .class_function("from_json", &common_peg_arena::from_json);
+        .function("load", select_overload<void(const std::string &), common_peg_arena>(&common_peg_arena::load))
+        .function("save", select_overload<std::string() const, common_peg_arena>(&common_peg_arena::save))
+        .function("empty", select_overload<bool() const, common_peg_arena>(&common_peg_arena::empty))
+        .function("size", select_overload<size_t() const, common_peg_arena>(&common_peg_arena::size))
+        .function("to_json", select_overload<common_json() const, common_peg_arena>(&common_peg_arena::to_json))
+        .class_function("from_json", select_overload<common_peg_arena(const common_json &)>(&common_peg_arena::from_json));
 
     class_<templates_owner>("common_chat_templates")
         .constructor<uint64_t, const std::string &, const std::string &, const std::string &>()
@@ -186,21 +198,33 @@ EMSCRIPTEN_BINDINGS(llama_common_chat) {
         })
         .function("get_asr_prompt", +[](const templates_owner & self) { return common_chat_get_asr_prompt(self.value.get()); });
 
-    function("common_chat_verify_template", &common_chat_verify_template);
-    function("common_chat_parse", &common_chat_parse);
-    function("common_chat_peg_parse", &common_chat_peg_parse);
-    function("common_chat_msgs_parse_oaicompat", &common_chat_msgs_parse_oaicompat);
-    function("common_chat_msgs_to_json_oaicompat", &common_chat_msgs_to_json_oaicompat);
-    function("common_chat_tools_parse_oaicompat", &common_chat_tools_parse_oaicompat);
-    function("common_chat_tools_to_json_oaicompat", &common_chat_tools_to_json_oaicompat);
-    function("common_chat_continuation_parse", &common_chat_continuation_parse);
-    function("common_chat_tool_choice_parse_oaicompat", &common_chat_tool_choice_parse_oaicompat);
-    function("common_chat_msg_delimiters_parse", &common_chat_msg_delimiters_parse);
-    function("common_chat_role_from_string", &common_chat_role_from_string);
+    function("common_chat_verify_template",
+        select_overload<bool(const std::string &, bool)>(&common_chat_verify_template));
+    function("common_chat_parse",
+        select_overload<common_chat_msg(const std::string &, bool, const common_chat_parser_params &)>(&common_chat_parse));
+    function("common_chat_peg_parse",
+        select_overload<common_chat_msg(const common_peg_arena &, const std::string &, bool, const common_chat_parser_params &)>(&common_chat_peg_parse));
+    function("common_chat_msgs_parse_oaicompat",
+        select_overload<std::vector<common_chat_msg>(const common_json &)>(&common_chat_msgs_parse_oaicompat));
+    function("common_chat_msgs_to_json_oaicompat",
+        select_overload<common_json(const std::vector<common_chat_msg> &, bool)>(&common_chat_msgs_to_json_oaicompat));
+    function("common_chat_tools_parse_oaicompat",
+        select_overload<std::vector<common_chat_tool>(const common_json &)>(&common_chat_tools_parse_oaicompat));
+    function("common_chat_tools_to_json_oaicompat",
+        select_overload<common_json(const std::vector<common_chat_tool> &)>(&common_chat_tools_to_json_oaicompat));
+    function("common_chat_continuation_parse",
+        select_overload<common_chat_continuation(const common_json &)>(&common_chat_continuation_parse));
+    function("common_chat_tool_choice_parse_oaicompat",
+        select_overload<common_chat_tool_choice(const std::string &)>(&common_chat_tool_choice_parse_oaicompat));
+    function("common_chat_msg_delimiters_parse",
+        select_overload<common_chat_msg_delimiters(const common_json &)>(&common_chat_msg_delimiters_parse));
+    function("common_chat_role_from_string",
+        select_overload<common_chat_role(const std::string &)>(&common_chat_role_from_string));
     function("common_chat_role_to_string", +[](common_chat_role role) { return std::string(common_chat_role_to_string(role)); });
     function("common_chat_format_name", +[](common_chat_format format) { return std::string(common_chat_format_name(format)); });
     function("common_reasoning_format_name", +[](common_reasoning_format format) { return std::string(common_reasoning_format_name(format)); });
-    function("common_reasoning_format_from_name", &common_reasoning_format_from_name);
+    function("common_reasoning_format_from_name",
+        select_overload<common_reasoning_format(const std::string &)>(&common_reasoning_format_from_name));
     // Upstream also overloads this name for common_chat_schema_document (v0.4.1).
     // Keep the existing JSON + force_gbnf binding; an unqualified address is
     // ambiguous to Embind's function template once that overload is present.

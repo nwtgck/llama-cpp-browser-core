@@ -74,6 +74,66 @@ Applications must sequence all access to one instance,
 including Embind calls during pending GPU operations. The optional reference
 `core.api` Promise wrapper and its busy guard apply only to calls through that wrapper.
 
+## Explicit overload contracts
+
+Every named C++ function pointer directly registered in `bridge/chat-embind.cpp`
+uses Embind's standard `select_overload`, including currently non-overloaded free
+functions, static methods, and instance methods. The signature is a handwritten
+contract for the existing JavaScript surface, not a type deduced from whichever
+upstream function happens to be available. For example:
+
+```cpp
+function("common_chat_verify_template",
+    select_overload<bool(const std::string &, bool)>(&common_chat_verify_template));
+// Constness and the owning class are explicit for member functions.
+class_<common_json>("common_json")
+    .function("dump", select_overload<std::string(int) const, common_json>(&common_json::dump));
+```
+
+The owning class is intentional. Specifying only `select_overload<Signature>` for
+an instance method still asks the compiler to deduce `ClassType`. A future
+same-name member function template can make that deduction ambiguous even when
+the desired method remains. `select_overload<Signature, ClassType>` removes that
+last inference. Static functions use the ordinary free-function-pointer form.
+`select_const` alone does not specify argument/return types and is not a substitute.
+
+No custom dispatcher, overload registry, name-based fallback, or generated
+adapter is introduced. The implementation retains names, argument order, native
+widths, const/reference qualifiers, return values and Embind ownership behavior.
+For standard clock functions, the declared duration/representation aliases remain
+platform-native; no assumption about their integer width or clock resolution is
+added. Using a non-noexcept pointer signature also accepts the standard library's
+noexcept methods without adding an exception-policy change at the JS boundary.
+
+This prevents ambiguity when **the selected overload still exists** and other
+overloads are added. A removed or changed selected signature is intentionally a
+compile error; the bridge must not silently bind a different interface. Identical
+types with changed behavior still need runtime tests. Field properties, enum
+values and explicitly typed constructors are not unqualified function-pointer
+registrations. Existing captureless pointer/ownership adapters retain their
+ordinary typed call expressions; this policy does not attempt to freeze overload
+resolution inside every adapter, upstream implementation, or generated C wrapper.
+There is no change to the upstream source overlay or its application checks.
+
+`tests/test_embind_overloads.py` guards the bridge's direct-registration style and
+compiles every production signature against synthetic overload sets, including
+extra arguments with defaults, function templates and opposite-const methods.
+It covers both declaration orders, rejects bare-pointer registration, and checks
+that removal of a selected signature fails instead of selecting a substitute.
+A native execution fixture checks bool values, reference identity, mutable and
+const methods, and native clock values. Another syntax test uses the real
+checkout's headers (`LCB_TEST_LLAMA_SOURCE` can supply a local tree). These native
+checks model only the two standard selector templates, not Embind marshalling.
+They run through existing Python test discovery without new dependencies or a
+workflow change. `LCB_TEST_CXX` optionally selects a native C++ compiler for them.
+
+The real generated-module `tests/chat-surface.mjs` continues to cover JSON grammar
+conversion with both boolean values and now also exercises static JSON factories,
+const predicates, message methods, and parser JSON serialization/restoration. Only
+the actual runtime build/smoke test verifies the complete Emscripten binding.
+
+Reference: [Embind select_overload](https://emscripten.org/docs/api_reference/bind.h.html#select-overload-and-select-const).
+
 ## Multimodal C API and validation
 
 The generator includes non-deprecated `mtmd.h` / `mtmd-helper.h` C declarations,
