@@ -93,3 +93,16 @@ Actions checks all five profiles in browser and test variants, standard type gen
 then exercises direct generated-module chat primitives and RGB/PCM allocation in
 CPU Chromium. Trained tool-model inference, image/audio mmproj inference, and WebGPU
 inference remain separate validations. Native host smoke covers C bindings only.
+
+
+## WebGPU BF16 vision weights
+
+WebGPU runtimes expand vision Brain Floating Point 16 (BF16) weights to F32 in
+memory to avoid the pinned backend's BF16 matmul fallback. Model files and
+language-model weights are unchanged. Converted resident weights use twice the
+BF16 space; conversion scratch is bounded to 1.5 MiB. Existing WebGPU kernels may
+still use F16 intermediate storage, so this is not full-F32 arithmetic. Native
+`lcb_clip: bf16-f32` and `lcb_clip: matmul placement` summaries contain only counts
+and byte totals, not paths or tensor values. Real-model speed and quality must be
+validated separately; the workaround does not guarantee GPU placement for all
+operations or sizes.
