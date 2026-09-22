@@ -5,12 +5,20 @@ on:
     branches-ignore:
       - artifacts
       - 'artifacts/**'
+  # A human-created PR is the handoff after the updater's GITHUB_TOKEN push.
+  # Push + synchronize duplicates are intentional; there is no deduplication gate.
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches-ignore:
+      - artifacts
+      - 'artifacts/**'
   workflow_dispatch:
-    inputs:
-      expected_source:
-        description: 'Optional source SHA guard used by the upstream updater'
-        type: string
-        default: ''
+
+# PR events normally check out a synthetic merge commit. All jobs deliberately
+# build the immutable PR head instead, so push and PR artifacts share a source
+# identity and comments can match the manifest to the actual PR head.
+env:
+  LCB_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
 
 permissions:
   contents: read
@@ -18,26 +26,23 @@ permissions:
 jobs:
   test:
     name: Test host and publication code
-    if: github.ref_type == 'branch' && github.ref_name != 'artifacts' && !startsWith(github.ref_name, 'artifacts/')
+    if: >-
+      (github.event_name == 'pull_request' && github.head_ref != 'artifacts' && !startsWith(github.head_ref, 'artifacts/')) ||
+      (github.event_name != 'pull_request' && github.ref_type == 'branch' && github.ref_name != 'artifacts' && !startsWith(github.ref_name, 'artifacts/'))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.LCB_SOURCE_COMMIT }}
           submodules: recursive
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
-      - name: Verify the dispatched source identity
-        env:
-          EXPECTED_SOURCE: ${{ inputs.expected_source }}
+      - name: Verify the checked-out source identity
         shell: bash
-        run: |
-          if [[ -n "$EXPECTED_SOURCE" && "$GITHUB_SHA" != "$EXPECTED_SOURCE" ]]; then
-            echo 'The source branch changed after dispatch was requested; publication is blocked.' >&2
-            exit 1
-          fi
+        run: test "$(git rev-parse HEAD)" = "$LCB_SOURCE_COMMIT"
       - name: Test host and publication code
         run: |
           npm test
@@ -49,12 +54,15 @@ jobs:
           build/mtmd-bf16-tests/mtmd-bf16-test
   compile:
     name: Build ${{ matrix.profile }} / ${{ matrix.variant }}
-    if: github.ref_type == 'branch' && github.ref_name != 'artifacts' && !startsWith(github.ref_name, 'artifacts/')
+    if: >-
+      (github.event_name == 'pull_request' && github.head_ref != 'artifacts' && !startsWith(github.head_ref, 'artifacts/')) ||
+      (github.event_name != 'pull_request' && github.ref_type == 'branch' && github.ref_name != 'artifacts' && !startsWith(github.ref_name, 'artifacts/'))
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      max-parallel: 4
+      # Intentionally omit max-parallel: use all available runners to reduce build wait time.
+      # Do not add a workflow-level parallelism cap; runner/account limits still apply.
       matrix:
         profile:
           - cpu-wasm32
@@ -68,6 +76,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.LCB_SOURCE_COMMIT }}
           submodules: recursive
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -119,6 +128,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.LCB_SOURCE_COMMIT }}
           submodules: recursive
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -168,6 +178,11 @@ jobs:
           git submodule foreach --recursive 'git status --short --untracked-files=all --ignore-submodules=none'
   publish:
     needs: build
+    # Ordinary same-repository PR heads have the same publication trust as
+    # source pushes. Fork PRs and Dependabot runs never receive write credentials.
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -175,6 +190,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.LCB_SOURCE_COMMIT }}
           submodules: recursive
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -184,6 +200,15 @@ jobs:
         with:
           name: runtime-package
           path: dist/package/
+      - name: Verify package source before publication
+        run: |
+          python3 - <<'PYVERIFY'
+          import json, os
+          from pathlib import Path
+          source = json.loads(Path('dist/package/manifest.json').read_text())['sourceCommit']
+          if source != os.environ['LCB_SOURCE_COMMIT']:
+              raise SystemExit('Runtime package does not match the selected source commit; publication is blocked.')
+          PYVERIFY
       - name: Publish append-only artifact commit
         id: publish
         env:

@@ -1,4 +1,4 @@
-"""Offline release selection and real local-Git update/PR orchestration tests."""
+"""Offline release selection and real local-Git branch handoff tests."""
 import json
 import os
 from pathlib import Path
@@ -7,13 +7,14 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from urllib.parse import parse_qs, unquote, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from github_api import ApiError, full_sha, repository_name
 import update_llama_cpp as update
 
-A, B = 'a' * 40, 'b' * 40
+A, B, C = 'a' * 40, 'b' * 40, 'c' * 40
 
 
 class ReleaseApi:
@@ -24,27 +25,29 @@ class ReleaseApi:
         self.tags = tags or {}
         self.calls = []
 
-    def pages(self, path, **params):
-        self.calls.append(path)
+    def iter_releases(self, repository):
+        self.calls.append(('iter_releases', repository))
         yield from self.releases
 
-    def request(self, method, path, data=None):
-        self.calls.append(path)
-        suffix = path.removeprefix(update.PREFIX)
-        if suffix == '/releases/latest':
-            if self.latest is None:
-                raise ApiError(404, 'No stable release')
-            return self.latest
-        if suffix.startswith('/git/ref/'):
-            name = suffix.removeprefix('/git/ref/')
-            if name not in self.refs:
-                raise ApiError(404, 'Missing ref')
-            return {'object': self.refs[name]}
-        if suffix.startswith('/git/tags/'):
-            return {'object': self.tags[suffix.rsplit('/', 1)[1]]}
-        if suffix.startswith('/commits/'):
-            return {'sha': suffix.rsplit('/', 1)[1]}
-        raise AssertionError(path)
+    def get_latest_release(self, repository):
+        self.calls.append(('get_latest_release', repository))
+        if self.latest is None:
+            raise ApiError(404, 'No stable release')
+        return self.latest
+
+    def get_ref(self, repository, ref):
+        self.calls.append(('get_ref', repository, ref))
+        if ref not in self.refs:
+            raise ApiError(404, 'Missing ref')
+        return {'object': self.refs[ref]}
+
+    def get_tag(self, repository, tag_sha):
+        self.calls.append(('get_tag', repository, tag_sha))
+        return {'object': self.tags[tag_sha]}
+
+    def get_commit(self, repository, commit):
+        self.calls.append(('get_commit', repository, commit))
+        return {'sha': commit}
 
 
 def release(name, prerelease=False, draft=False):
@@ -67,7 +70,7 @@ class ReleaseSelection(unittest.TestCase):
                 api = ReleaseApi(latest=value)
                 with self.assertRaises(ValueError):
                     update.resolve_target(api, 'latest')
-                self.assertEqual(api.calls, [update.PREFIX + '/releases/latest'])
+                self.assertEqual(api.calls, [('get_latest_release', update.UPSTREAM)])
         with self.assertRaises(ApiError):
             update.resolve_target(ReleaseApi(), 'latest')
 
@@ -77,7 +80,7 @@ class ReleaseSelection(unittest.TestCase):
         api = ReleaseApi(releases=values, refs={'tags/b99': {'type': 'commit', 'sha': B}})
         result = update.resolve_target(api, 'latest-unstable')
         self.assertEqual(result['ref'], 'refs/tags/b99')
-        self.assertNotIn(update.PREFIX + '/git/ref/heads/master', api.calls)
+        self.assertNotIn(('get_ref', update.UPSTREAM, 'heads/master'), api.calls)
 
     def test_no_nightly_is_an_error(self):
         with self.assertRaises(ValueError):
@@ -114,7 +117,7 @@ class ReleaseSelection(unittest.TestCase):
 
     def test_api_errors_are_not_treated_as_missing_tags(self):
         api = ReleaseApi()
-        api.request = lambda *args: (_ for _ in ()).throw(ApiError(403, 'Rate limited'))
+        api.get_ref = lambda *args: (_ for _ in ()).throw(ApiError(403, 'Rate limited'))
         with self.assertRaises(ApiError):
             update.resolve_named_ref(api, 'master')
 
@@ -129,29 +132,16 @@ class ReleaseSelection(unittest.TestCase):
 
 
 class ProposalApi:
+    # Intentionally no PR or workflow operations: the branch updater only needs
+    # upstream reads. Any accidental orchestration call fails these tests.
     def __init__(self):
-        self.prs = []
-        self.dispatches = []
         self.relation = 'ahead'
-        self.fail_create = False
+        self.calls = []
 
-    def pages(self, path, **params):
-        return iter(self.prs)
-
-    def request(self, method, path, data=None):
-        if '/compare/' in path:
-            return {'status': self.relation}
-        if method == 'POST' and path.endswith('/pulls'):
-            if self.fail_create:
-                raise ApiError(403, 'Actions cannot create PRs')
-            pr = {**data, 'number': 7, 'html_url': 'https://github.com/example/core/pull/7', 'state': 'open',
-                  'head': {'ref': data['head'], 'repo': {'full_name': 'example/core'}}}
-            self.prs.append(pr)
-            return pr
-        if path.endswith('/dispatches'):
-            self.dispatches.append(data)
-            return None
-        raise AssertionError((method, path))
+    def compare_commits(self, repository, base, head):
+        assert repository == update.UPSTREAM
+        self.calls.append(('compare_commits', repository, base, head))
+        return {'status': self.relation}
 
 
 class LocalGitProposal(unittest.TestCase):
@@ -207,21 +197,29 @@ class LocalGitProposal(unittest.TestCase):
         self.git('checkout', '--detach', self.base, cwd=self.root)
         self.git('submodule', 'update', '--init', cwd=self.root)
 
-    def test_real_git_changes_exactly_two_pins_and_dispatches(self):
+    def test_real_git_changes_exactly_two_pins_and_stops_after_push(self):
         result = self.propose()
-        self.assertEqual(result['status'], 'build-dispatched')
+        self.assertEqual(result['status'], 'branch-created')
         self.assertEqual(result['preflight']['status'], 'passed')
         self.assertEqual(set(self.git('diff', '--name-only', self.base, 'HEAD', cwd=self.root).splitlines()), update.PINS)
         self.assertEqual(json.loads((self.root / 'config/toolchain.json').read_text())['otherPin'], 'unchanged')
         self.assertEqual((self.root / 'vendor/llama.cpp/tools/mtmd/clip.cpp').read_text(), 'before\noriginal\nafter\n')
-        self.assertEqual(self.api.dispatches[0]['inputs']['expected_source'], result['sourceCommit'])
-        self.assertFalse(self.api.prs[0]['draft'])
+        remote = self.git('ls-remote', str(self.remote), 'refs/heads/' + result['branch'], cwd=self.home)
+        self.assertEqual(remote.split()[0], result['sourceCommit'])
+        self.assertEqual(self.api.calls, [('compare_commits', update.UPSTREAM, self.old, self.new)])
+        query = parse_qs(urlparse(result['createPullRequestUrl']).query)
+        self.assertEqual(query['quick_pull'], ['1'])
+        self.assertEqual(query['title'], [result['pullRequestTitle']])
+        self.assertEqual(query['body'], [result['pullRequestBody']])
+        self.assertIn('develop...' + result['branch'], unquote(urlparse(result['compareUrl']).path))
+        self.assertNotIn('pullRequest', result)
+        self.assertNotIn('pullRequestUrl', result)
 
-    def test_no_op_creates_no_pr_or_dispatch(self):
+    def test_no_op_creates_no_branch_or_remote_operations(self):
         self.target['commit'] = self.old
         self.assertEqual(self.propose()['status'], 'unchanged')
-        self.assertFalse(self.api.prs)
-        self.assertFalse(self.api.dispatches)
+        self.assertEqual(self.api.calls, [])
+        self.assertEqual(self.git('ls-remote', '--heads', str(self.remote), cwd=self.home), '')
 
     def test_dirty_checkout_is_rejected(self):
         (self.root / 'untracked').write_text('not an update input')
@@ -239,17 +237,20 @@ class LocalGitProposal(unittest.TestCase):
         self.api.relation = 'behind'
         with self.assertRaisesRegex(ValueError, 'allow_non_fast_forward'):
             self.propose()
-        self.assertEqual(self.propose(allow_non_fast_forward=True)['status'], 'build-dispatched')
+        self.assertEqual(self.propose(allow_non_fast_forward=True)['status'], 'branch-created')
 
-    def test_conflicting_overlay_is_a_draft_without_build(self):
+    def test_conflicting_overlay_preserves_candidate_without_creating_a_pr(self):
         (self.root / 'patches/mtmd-webgpu-bf16.patch').write_text('not a patch\n')
         self.git('add', '.', cwd=self.root)
         self.git('commit', '-qm', 'Broken patch fixture', cwd=self.root)
         result = self.propose()
-        self.assertEqual(result['status'], 'draft-needs-overlay-repair')
-        self.assertTrue(self.api.prs[0]['draft'])
-        self.assertFalse(self.api.dispatches)
+        self.assertEqual(result['status'], 'branch-created-needs-overlay-repair')
+        self.assertTrue(self.git('ls-remote', str(self.remote), 'refs/heads/' + result['branch'], cwd=self.home))
+        self.assertNotIn('draft', result)
         self.assertIn('patch', result['preflight']['error'])
+        summary = update.render_summary(result)
+        self.assertIn('draft status is not a build gate', summary)
+        self.assertIn('Overlay preflight failed', summary)
 
     def test_rerun_preserves_manual_repair_commit(self):
         first = self.propose()
@@ -259,10 +260,13 @@ class LocalGitProposal(unittest.TestCase):
         repair = self.git('rev-parse', 'HEAD', cwd=self.root)
         self.git('push', str(self.remote), 'HEAD:refs/heads/' + first['branch'], cwd=self.root)
         self.restore_base()
+        call_count = update.git.call_count
         second = self.propose()
         self.assertEqual(second['sourceCommit'], repair)
-        self.assertEqual(len(self.api.prs), 1)
-        self.assertEqual(len(self.api.dispatches), 2)
+        self.assertEqual(second['status'], 'branch-exists')
+        self.assertNotIn('push', [call.args[0] for call in update.git.call_args_list[call_count:]])
+        self.assertEqual(len(self.api.calls), 2)
+        self.assertIn('does not re-run its CI', update.render_summary(second))
         self.assertEqual(self.git('rev-parse', 'HEAD', cwd=self.root), self.base)
 
     def test_existing_branch_with_different_pins_is_not_overwritten(self):
@@ -276,23 +280,77 @@ class LocalGitProposal(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'refusing to overwrite'):
             self.propose()
 
-    def test_closed_pr_is_not_reopened(self):
-        self.propose()
-        self.api.prs[0]['state'] = 'closed'
+    def test_existing_branch_needs_no_pr_read_or_write_permission(self):
+        first = self.propose()
         self.restore_base()
-        with self.assertRaisesRegex(ValueError, 'closed PR'):
-            self.propose()
+        second = self.propose()
+        self.assertEqual(second['status'], 'branch-exists')
+        self.assertEqual(second['sourceCommit'], first['sourceCommit'])
+        self.assertEqual(second['branch'], first['branch'])
+        self.assertEqual(second['preflight']['status'], 'not-repeated')
+        self.assertTrue(all(call[0] == 'compare_commits' for call in self.api.calls))
 
-    def test_pr_creation_failure_leaves_recoverable_branch(self):
-        self.api.fail_create = True
-        with self.assertRaises(ApiError):
-            self.propose()
-        branch = update.candidate_branch('develop', self.base, self.new)
-        self.assertTrue(self.git('ls-remote', str(self.remote), 'refs/heads/' + branch, cwd=self.home))
-        self.assertFalse(self.api.dispatches)
-        self.api.fail_create = False
-        self.restore_base()
-        self.assertEqual(self.propose()['status'], 'build-dispatched')
+    def test_push_failure_retains_partial_identity_without_claiming_pr_creation(self):
+        local_git = update.git.side_effect
+        def fail_push(*args, **kwargs):
+            if args[0] == 'push':
+                raise RuntimeError('Branch write denied')
+            return local_git(*args, **kwargs)
+        progress = {}
+        with patch.object(update, 'git', side_effect=fail_push):
+            with self.assertRaisesRegex(RuntimeError, 'Branch write denied'):
+                self.propose(progress=progress)
+        self.assertEqual(progress['target']['commit'], self.new)
+        self.assertIn('branchUrl', progress)
+        self.assertIn('sourceCommit', progress)
+        self.assertNotIn('createPullRequestUrl', progress)
+        self.assertNotIn('pullRequest', progress)
+
+
+class BrowserHandoff(unittest.TestCase):
+    def result(self):
+        return {'base': 'feature/base', 'branch': 'automation/llama-cpp/candidate',
+                'branchUrl': 'https://github.com/example/core/tree/automation/llama-cpp/candidate',
+                'previousCommit': A, 'sourceCommit': C, 'upstreamRelation': 'ahead',
+                'target': {'requested': 'custom', 'ref': 'refs/heads/topic/new', 'commit': B},
+                'preflight': {'status': 'passed', 'scope': 'patch application only'},
+                'status': 'branch-created'}
+
+    def test_form_link_is_encoded_and_not_an_api_operation(self):
+        result = self.result()
+        links = update.pull_request_links('example/core', result)
+        url = urlparse(links['createPullRequestUrl'])
+        self.assertEqual(url.netloc, 'github.com')
+        self.assertEqual(unquote(url.path), '/example/core/compare/feature/base...automation/llama-cpp/candidate')
+        query = parse_qs(url.query)
+        self.assertEqual(query['quick_pull'], ['1'])
+        self.assertEqual(query['title'], ['chore: update llama.cpp to refs/heads/topic/new'])
+        self.assertIn(A, query['body'][0])
+        self.assertIn(B, query['body'][0])
+        self.assertNotIn('draft', query)
+
+    def test_long_title_does_not_create_an_unusable_prefilled_url(self):
+        result = self.result()
+        result['target']['ref'] = 'refs/tags/' + 'x' * 8000
+        links = update.pull_request_links('example/core', result)
+        self.assertLess(len(links['createPullRequestUrl']), 7000)
+        self.assertGreater(len(links['pullRequestBody']), 8000)
+        self.assertEqual(parse_qs(urlparse(links['createPullRequestUrl']).query), {'quick_pull': ['1']})
+
+    def test_diagnostics_stay_in_report_not_in_query_parameters(self):
+        result = self.result()
+        result['preflight'] = {'status': 'failed', 'scope': 'patch application only', 'error': 'diagnostic ' * 1000}
+        links = update.pull_request_links('example/core', result)
+        self.assertNotIn('diagnostic+diagnostic', links['createPullRequestUrl'])
+        summary = update.render_summary({**result, **links})
+        self.assertIn('diagnostic diagnostic', summary)
+        self.assertIn('[Open pull request form]', summary)
+        self.assertIn('The links do not create a PR', summary)
+
+    def test_no_op_summary_has_no_broken_pr_links(self):
+        summary = update.render_summary({'status': 'unchanged'})
+        self.assertNotIn('Open pull request form', summary)
+        self.assertIn('unchanged', summary)
 
 
 class FailureReporting(unittest.TestCase):

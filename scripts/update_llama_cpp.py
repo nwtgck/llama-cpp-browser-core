@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve an upstream revision, propose its two pins, and dispatch the existing build."""
+"""Prepare and push an upstream-update branch; pull-request creation stays manual."""
 from __future__ import annotations
 
 import argparse
@@ -10,14 +10,13 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from github_api import ApiError, GitHub, full_sha, git, git_auth_env, repository_name
 from prepare_mtmd import prepare
 
 ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM = 'ggml-org/llama.cpp'
-PREFIX = '/repos/' + UPSTREAM
 STABLE = re.compile(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z')
 NIGHTLY = re.compile(r'b[0-9]+\Z')
 PINS = {'vendor/llama.cpp', 'config/toolchain.json'}
@@ -38,14 +37,14 @@ def peel(api: GitHub, obj: dict) -> str:
             return full_sha(obj['sha'])
         if obj['type'] != 'tag':
             break
-        obj = api.request('GET', PREFIX + '/git/tags/' + full_sha(obj['sha']))['object']
+        obj = api.get_tag(UPSTREAM, full_sha(obj['sha']))['object']
     raise ValueError('Upstream ref does not resolve to a commit')
 
 
 def resolve_named_ref(api: GitHub, ref: str) -> str:
     checked_ref(ref)
     if re.fullmatch(r'[0-9a-f]{40}', ref):
-        result = api.request('GET', PREFIX + '/commits/' + ref)
+        result = api.get_commit(UPSTREAM, ref)
         if result['sha'] != ref:
             raise ValueError('Commit resolution mismatch')
         return ref
@@ -53,7 +52,7 @@ def resolve_named_ref(api: GitHub, ref: str) -> str:
     objects = []
     for candidate in candidates:
         try:
-            objects.append(api.request('GET', PREFIX + '/git/ref/' + quote(candidate, safe='/'))['object'])
+            objects.append(api.get_ref(UPSTREAM, candidate)['object'])
         except ApiError as error:
             if error.status != 404:
                 raise
@@ -70,7 +69,7 @@ def resolve_target(api: GitHub, target: str, custom_ref: str = '') -> dict:
         if custom_ref:
             raise ValueError('custom_ref is only valid with target=custom')
         if target == 'latest':
-            release = api.request('GET', PREFIX + '/releases/latest')
+            release = api.get_latest_release(UPSTREAM)
             # A tag pattern alone cannot establish release status. Conversely,
             # older bNNNN releases must never silently become the stable channel.
             if release['draft'] or release['prerelease'] or not STABLE.fullmatch(release['tag_name']):
@@ -78,7 +77,7 @@ def resolve_target(api: GitHub, target: str, custom_ref: str = '') -> dict:
         elif target == 'latest-unstable':
             # First published bNNNN pre-release in GitHub's release-list order.
             # This is the released nightly channel, never an unbuilt master tip.
-            release = next((item for item in api.pages(PREFIX + '/releases')
+            release = next((item for item in api.iter_releases(UPSTREAM)
                             if not item['draft'] and item['prerelease']
                             and item.get('published_at') and NIGHTLY.fullmatch(item['tag_name'])), None)
             if release is None:
@@ -121,8 +120,8 @@ def overlay_preflight(root: Path) -> dict:
             prepare(root / 'vendor/llama.cpp', Path(tmp) / 'overlay', root / 'patches/mtmd-webgpu-bf16.patch', capture_output=True)
         return {'status': 'passed', 'scope': 'patch application only; not compilation or inference'}
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
-        # A failed overlay still produces a draft PR, preserving the exact
-        # update candidate for human repair. No automatic patch fuzz or deletion.
+        # A failed overlay still leaves a candidate branch for human repair.
+        # No automatic PR, build dispatch, patch fuzz, or patch deletion.
         details = error.stderr if isinstance(error, subprocess.CalledProcessError) and error.stderr else str(error)
         return {'status': 'failed', 'scope': 'patch application only', 'error': details.strip()[:4000]}
 
@@ -134,16 +133,34 @@ def candidate_branch(base: str, source: str, target: str) -> str:
     return f'automation/llama-cpp/{identity}-{full_sha(source)[:12]}-{full_sha(target)[:12]}'
 
 
-def find_pr(api: GitHub, repository: str, branch: str, base: str) -> dict | None:
-    owner = repository.split('/')[0]
-    matches = [pr for pr in api.pages('/repos/' + repository + '/pulls', state='all',
-                                      head=owner + ':' + branch, base=base)
-               if (pr['head'].get('repo') or {}).get('full_name') == repository and pr['head']['ref'] == branch]
-    if any(pr['state'] != 'open' for pr in matches):
-        raise ValueError('This exact update already has a closed PR; no automatic reopening or overwrite')
-    if len(matches) > 1:
-        raise ValueError('Multiple update PRs found')
-    return matches[0] if matches else None
+def pull_request_links(repository: str, result: dict) -> dict:
+    """Describe a browser handoff, without reading or mutating pull requests."""
+    base, branch = result['base'], result['branch']
+    target, preflight = result['target'], result['preflight']
+    title = 'chore: update llama.cpp to ' + target['ref'].removeprefix('refs/tags/')
+    body = ('## Upstream update\n\n'
+            f'- Requested channel: `{target["requested"]}`\n'
+            f'- Resolved ref: `{target["ref"]}`\n'
+            f'- Previous llama.cpp: `{result["previousCommit"]}`\n'
+            f'- Proposed llama.cpp: `{target["commit"]}`\n'
+            f'- Upstream relation: `{result["upstreamRelation"]}`\n'
+            f'- Overlay preflight: **{preflight["status"]}** ({preflight["scope"]})\n\n'
+            f'[Upstream comparison](https://github.com/{UPSTREAM}/compare/{result["previousCommit"]}...{target["commit"]})\n\n'
+            'The automated commit changes only the submodule gitlink and '
+            '`config/toolchain.json`. A reused branch may also contain manual repairs. '
+            'Preflight is not build or inference validation. Full preflight diagnostics '
+            'are in the updater run summary and upstream-update-report artifact.\n\n'
+            'Opening this PR starts the ordinary runtime workflow. A successful '
+            'same-repository build publishes before merge; its runtime comment '
+            'contains the installation command and consumer metadata.\n')
+    compare = f'https://github.com/{repository_name(repository)}/compare/{quote(base, safe="")}...{quote(branch, safe="")}'
+    url = compare + '?' + urlencode({'quick_pull': '1', 'title': title, 'body': body})
+    # A long ref must not turn the browser handoff into an unusable URL. The
+    # complete suggested title/body remain available in the summary/report.
+    if len(url) > 7000:
+        url = compare + '?quick_pull=1'
+    return {'compareUrl': compare, 'createPullRequestUrl': url,
+            'pullRequestTitle': title, 'pullRequestBody': body}
 
 
 def propose(root: Path, api: GitHub, repository: str, base: str, target: dict,
@@ -160,13 +177,12 @@ def propose(root: Path, api: GitHub, repository: str, base: str, target: dict,
     result.update({'base': base, 'baseCommit': source, 'previousCommit': previous, 'target': target})
     if previous == target['commit']:
         return {**result, 'status': 'unchanged'}
-    comparison = api.request('GET', PREFIX + '/compare/' + previous + '...' + target['commit'])
+    comparison = api.compare_commits(UPSTREAM, previous, target['commit'])
     if comparison['status'] not in ('ahead', 'identical') and not allow_non_fast_forward:
         raise ValueError('Target is older or divergent; allow_non_fast_forward is required for this change')
     result['upstreamRelation'] = comparison['status']
     branch = candidate_branch(base, source, target['commit'])
     result.update({'branch': branch, 'branchUrl': f'https://github.com/{repository}/tree/{branch}'})
-    pr = find_pr(api, repository, branch, base)
     remote = 'https://github.com/' + repository + '.git'
     existing = git('ls-remote', '--exit-code', '--heads', remote, 'refs/heads/' + branch, cwd=root, check=False, env=git_auth_env(os.environ['GH_TOKEN']))
     if existing.returncode not in (0, 2):
@@ -181,6 +197,7 @@ def propose(root: Path, api: GitHub, repository: str, base: str, target: dict,
         if pins.get('llamaCommit') != target['commit'] or len(link) != 4 or link[:3] != ['160000', 'commit', target['commit']]:
             raise ValueError('Existing updater branch has different pins; refusing to overwrite it')
         preflight = {'status': 'not-repeated', 'scope': 'existing branch preserved; full build is authoritative'}
+        status = 'branch-exists'
     else:
         change_pins(root, target['commit'])
         preflight = overlay_preflight(root)
@@ -190,38 +207,36 @@ def propose(root: Path, api: GitHub, repository: str, base: str, target: dict,
             'commit', '-m', 'chore: update llama.cpp to ' + target['ref'].removeprefix('refs/tags/'), cwd=root)
         head = full_sha(git('rev-parse', 'HEAD', cwd=root).stdout.strip())
         result['sourceCommit'] = head
-        # No force-push, including races between simultaneous dispatches.
+        # No force-push, including races between simultaneous updater runs.
         git('push', remote, head + ':refs/heads/' + branch, cwd=root,
             env=git_auth_env(os.environ['GH_TOKEN']))
+        status = 'branch-created-needs-overlay-repair' if preflight['status'] == 'failed' else 'branch-created'
     result.update({'branch': branch, 'sourceCommit': head, 'preflight': preflight})
-    if pr is None:
-        body = ('## Upstream update\n\n'
-                f'- Requested channel: `{target["requested"]}`\n'
-                f'- Resolved ref: `{target["ref"]}`\n'
-                f'- Previous llama.cpp: `{previous}`\n'
-                f'- Proposed llama.cpp: `{target["commit"]}`\n'
-                f'- Upstream relation: `{comparison["status"]}`\n'
-                f'- Overlay preflight: **{preflight["status"]}** ({preflight["scope"]})\n\n'
-                f'[Upstream comparison](https://github.com/{UPSTREAM}/compare/{previous}...{target["commit"]})\n\n'
-                'Only the submodule gitlink and `config/toolchain.json` are changed. '
-                'A failed preflight leaves a draft PR for manual overlay repair. '
-                'A successful build publishes an immutable runtime artifact before merge. '
-                'The runtime comment contains installation and consumer metadata.\n')
-        if preflight['status'] == 'failed':
-            body += '\nPreflight error: ' + preflight['error'].replace('`', "'")[:2000] + '\n'
-        pr = api.request('POST', '/repos/' + repository + '/pulls', {
-            'title': 'chore: update llama.cpp to ' + target['ref'].removeprefix('refs/tags/'),
-            'head': branch, 'base': base, 'body': body, 'draft': preflight['status'] == 'failed',
-        })
-    result.update({'pullRequest': pr['number'], 'pullRequestUrl': pr['html_url']})
-    if preflight['status'] == 'failed':
-        return {**result, 'status': 'draft-needs-overlay-repair'}
-    # GITHUB_TOKEN pushes do not trigger push workflows. Dispatch is explicit and
-    # the build checks its event SHA against this exact expected source commit.
-    api.request('POST', '/repos/' + repository + '/actions/workflows/build.yml/dispatches', {
-        'ref': branch, 'inputs': {'expected_source': head},
-    })
-    return {**result, 'status': 'build-dispatched'}
+    result.update(pull_request_links(repository, result))
+    # GITHUB_TOKEN pushes do not launch push workflows. Automation deliberately
+    # ends here: a human opens the PR, whose pull_request event starts the build.
+    # Reusing a branch is a no-write operation, even when it already has a PR.
+    return {**result, 'status': status}
+
+
+def render_summary(result: dict) -> str:
+    text = '## llama.cpp update branch\n\n'
+    if result.get('createPullRequestUrl'):
+        text += ('[Open pull request form](' + result['createPullRequestUrl'] + ') · '
+                 '[Compare branches](' + result['compareUrl'] + ') · '
+                 '[Update branch](' + result['branchUrl'] + ')\n\n'
+                 '**The updater ends at branch push.** The links do not create a PR. '
+                 'Submitting the PR in GitHub starts the ordinary runtime workflow; '
+                 'the bot-authenticated push is not replayed as a human push.\n\n')
+        if result['preflight']['status'] == 'failed':
+            text += ('**Overlay preflight failed.** The candidate branch is preserved '
+                     'for manual repair. Opening a PR, including a draft PR, can '
+                     'still start the build; draft status is not a build gate.\n\n')
+        elif result['status'] == 'branch-exists':
+            text += ('**Existing branch preserved without a push.** No build was requested. '
+                     'An already-open PR is unchanged; merely re-running this updater '
+                     'does not re-run its CI.\n\n')
+    return text + '<details>\n<summary>Update details and suggested PR text</summary>\n\n```json\n' + json.dumps(result, indent=2) + '\n```\n\n</details>\n'
 
 
 def main() -> None:
@@ -239,8 +254,8 @@ def main() -> None:
         result = propose(ROOT, api, os.environ['GITHUB_REPOSITORY'], args.base, target,
                          args.allow_non_fast_forward, progress=result)
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
-        # A pushed branch / created PR can survive a later permissions or dispatch
-        # failure. Its identity remains visible and a rerun reuses it safely.
+        # A pushed branch can survive a later reporting failure. Its identity
+        # remains visible and a rerun reuses it without replacing human changes.
         details = error.stderr if isinstance(error, subprocess.CalledProcessError) and error.stderr else str(error)
         result.update({'status': 'failed', 'error': details.strip()[:4000]})
         failed = True
@@ -248,9 +263,7 @@ def main() -> None:
     folder = ROOT / 'build/upstream-update'
     folder.mkdir(parents=True, exist_ok=True)
     (folder / 'report.json').write_text(json.dumps(result, indent=2) + '\n')
-    text = '## llama.cpp update\n\n```json\n' + json.dumps(result, indent=2) + '\n```\n'
-    if result.get('pullRequestUrl'):
-        text += '\n[Update pull request](' + result['pullRequestUrl'] + ')\n'
+    text = render_summary(result)
     print(text)
     if os.environ.get('GITHUB_STEP_SUMMARY'):
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:

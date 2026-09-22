@@ -26,15 +26,24 @@ The first artifact commit has no parent. Later commits use the previous artifact
 
 When concurrent builds race, the losing publisher fetches the new tip and recreates its candidate commit on that parent. Existing commits and hashes remain intact. After 20 failed attempts, the job fails and can be rerun. A concurrency configuration that cancels earlier pending builds is deliberately not used.
 
-The test, profile-build, and assembly jobs have read permission; only the publication job has write permission. Credentials are supplied through a process-local HTTP header rather than stored in the remote URL. Anyone who can push a source branch can change the resulting artifact; the workflow does not grant publication credentials to untrusted external pull requests.
+Human pushes and `pull_request` opened/reopened/synchronize events build independently.
+PR jobs check out the exact head commit, not the synthetic merge commit, and a
+same-repository PR can publish before merge. Duplicate push/synchronize builds
+are accepted; no cancellation or deduplication mechanism is added. Artifact
+branches are excluded from source builds. The publisher checks the assembled
+manifest against the selected source commit before writing to the remote.
+
+The test, profile-build, and assembly jobs have read permission; only the publication job has write permission. Credentials are supplied through a process-local HTTP header rather than stored in the remote URL. Anyone who can push a source branch can change the resulting artifact; the workflow does not grant publication credentials to external pull requests or Dependabot-triggered runs. Fork PRs can still run the read-only build and test jobs.
 
 ## Parallel profile builds
 
 Host/publication tests and the ten profile/variant builds run independently. Each pair
 has its own runner, checkout, toolchain, and `build/<profile>/<variant>/` directory. The matrix
-allows up to four concurrent builds and does not cancel the other profiles when
-one fails, so their diagnostics remain available. Runner availability and repository
-concurrency limits still determine when jobs actually start.
+intentionally omits `max-parallel` so every pair can start as soon as a runner is
+available, reducing build wait time. Do not add an artificial matrix parallelism
+cap. A failing pair does not cancel the other profiles, so their diagnostics remain
+available. Runner availability and account/repository limits still determine when
+jobs actually start.
 
 `scripts/stage_ci_build.py` transfers only the runtime directory, four generated API
 files, and provenance for one profile/variant pair. CMake caches, object files, static libraries,

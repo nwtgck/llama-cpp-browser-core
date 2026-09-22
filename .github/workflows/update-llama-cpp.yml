@@ -26,16 +26,15 @@ jobs:
     if: github.ref_type == 'branch'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # Branch preparation only: no PR writes or workflow-dispatch permission.
     permissions:
       contents: write
-      pull-requests: write
-      actions: write
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
           persist-credentials: false
-      - name: Resolve upstream, propose pins, and request the runtime build
+      - name: Resolve upstream, push the candidate branch, and show the PR form link
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ inputs.target }}

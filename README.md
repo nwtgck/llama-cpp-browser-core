@@ -89,7 +89,13 @@ The generated model is a small, deterministic, untrained GGUF fixture. Its purpo
 
 Source branches contain the pinned llama.cpp submodule and build tooling. The `artifacts` branch contains only the installable runtime, types, schemas, manifest, and license notices.
 
-GitHub Actions builds on pushes outside `artifacts` and `artifacts/**`. It runs host tests and builds all five profiles in both variants on separate runners. After all succeed, one assembly job runs Chromium smoke tests for both variants of the two CPU profiles and all three WebGPU profiles with JSPI/Asyncify suspension with a mocked unavailable GPU adapter. A Node.js regression exercises the test variant's Asyncify suspension. The browser variant is tested directly; passing test-variant checks alone does not validate browser artifacts. The combined package is verified before publishing an append-only artifact commit. Only the publication job has repository write permission. Repository rules must permit that job to update the artifact branch.
+GitHub Actions builds on pushes outside `artifacts` and `artifacts/**`, and on PR opened/reopened/synchronize events. PR builds use the exact head commit rather than a synthetic merge commit. Same-repository PRs can publish before merge; fork PRs build/test without publication credentials. Duplicate push/PR builds are intentionally allowed. It runs host tests and builds all five profiles in both variants on separate runners. After all succeed, one assembly job runs Chromium smoke tests for both variants of the two CPU profiles and all three WebGPU profiles with JSPI/Asyncify suspension with a mocked unavailable GPU adapter. A Node.js regression exercises the test variant's Asyncify suspension. The browser variant is tested directly; passing test-variant checks alone does not validate browser artifacts. The combined package is verified before publishing an append-only artifact commit. Within the runtime build workflow, only the publication job has repository write permission. Repository rules must permit that job to update the artifact branch.
+
+For browser-only upstream updates, **Actions > Update llama.cpp** prepares and
+pushes a candidate branch, then shows a prefilled PR form link. The updater does
+not create the PR or dispatch a build. Submitting the PR manually starts the
+ordinary runtime workflow. Its summary and PR comment contain the artifact pin,
+installation command, and consumer metadata. See [update automation](docs/update-automation.md).
 
 The artifact branch tip is the most recently published result, not necessarily a build from `main`. Consumers should pin the complete artifact commit and commit their lockfile. See the [distribution contract](docs/distribution.md).
 

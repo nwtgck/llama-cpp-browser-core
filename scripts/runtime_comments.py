@@ -7,9 +7,6 @@ import io
 import json
 import os
 import stat
-from urllib.error import HTTPError
-from urllib.parse import urlencode, urlparse
-from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 import zipfile
 
 from github_api import GitHub, full_sha, repository_name
@@ -20,35 +17,6 @@ END = '<!-- lcb-published-runtime:end -->'
 BOT = 'github-actions[bot]'
 REPORT_FILES = {'report.json', 'consumer-update.md', 'consumer-update.yaml'}
 MAX_ARCHIVE = 256 * 1024
-
-
-class NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, request, file, code, message, headers, new_url):
-        return None
-
-
-def download_report(api: GitHub, repository: str, artifact_id: int) -> bytes:
-    # GitHub redirects artifact downloads to a signed storage URL. The token is
-    # deliberately NOT forwarded to that host, and no archive code is executed.
-    headers = {'Accept': 'application/vnd.github+json', 'User-Agent': 'lcb-runtime-reporter'}
-    if api.token:
-        headers['Authorization'] = 'Bearer ' + api.token
-    url = f'https://api.github.com/repos/{repository_name(repository)}/actions/artifacts/{int(artifact_id)}/zip'
-    try:
-        with build_opener(NoRedirect()).open(Request(url, headers=headers), timeout=60) as response:
-            content = response.read(MAX_ARCHIVE + 1)
-    except HTTPError as error:
-        if error.code != 302:
-            raise RuntimeError(f'Artifact download failed: HTTP {error.code}') from None
-        location = error.headers['Location']
-        parsed = urlparse(location)
-        if parsed.scheme != 'https' or parsed.username or parsed.password:
-            raise ValueError('Unexpected artifact download redirect')
-        with urlopen(Request(location), timeout=60) as response:
-            content = response.read(MAX_ARCHIVE + 1)
-    if len(content) > MAX_ARCHIVE:
-        raise ValueError('Report archive exceeds the size limit')
-    return content
 
 
 def decode_report(content: bytes, repository: str, run: dict) -> str:
@@ -84,24 +52,12 @@ def same_repo_pr(pr: dict, repository: str) -> bool:
 
 
 def latest_run(api: GitHub, repository: str, pr: dict) -> dict | None:
-    runs = []
-    for page in range(1, 11):
-        params = urlencode({'branch': pr['head']['ref'], 'head_sha': full_sha(pr['head']['sha']),
-                            'per_page': 100, 'page': page})
-        values = api.request('GET', f'/repos/{repository}/actions/workflows/build.yml/runs?{params}')
-        # GitHub limits filtered run searches to 1,000 results. Refuse a partial
-        # history instead of overlooking a recently rerun older run ID.
-        if values.get('total_count', 0) > 1000:
-            raise ValueError('Too many matching builds to establish the latest run safely')
-        batch = values['workflow_runs']
-        runs.extend(run for run in batch
-                    if run['head_sha'] == pr['head']['sha'] and run['head_branch'] == pr['head']['ref']
-                    and (run.get('head_repository') or {}).get('full_name') == repository
-                    and run['event'] in ('push', 'workflow_dispatch'))
-        if len(batch) < 100 or page * 100 >= values.get('total_count', 1001):
-            break
-    else:
-        raise ValueError('Build history pagination limit exceeded')
+    runs = [run for run in api.iter_build_runs(repository, branch=pr['head']['ref'], head_sha=full_sha(pr['head']['sha']))
+            if run['head_sha'] == pr['head']['sha'] and run['head_branch'] == pr['head']['ref']
+            and (run.get('head_repository') or {}).get('full_name') == repository
+            and run['event'] in ('push', 'pull_request', 'workflow_dispatch')]
+    # Push and pull_request runs are both allowed, even for the same commit.
+    # They build the exact head, not GitHub's synthetic merge commit.
     # A rerun keeps its run ID; start time distinguishes a newly requested rerun
     # from a newer-ID run that actually started earlier. Completion time is not
     # used, because an old slow build must not win by finishing last.
@@ -129,7 +85,8 @@ def comment_body(pr: dict, run: dict | None, payload: str | None, previous: str 
     head = full_sha(pr['head']['sha'])
     header = f'{MARKER}\n## Runtime publication status\n\n**Current PR head:** `{head}`\n\n'
     if run is None:
-        status = 'No matching runtime build is recorded for this head. An upstream update may still need overlay repair or explicit build dispatch.'
+        status = ('No matching runtime build is recorded for this head yet. Human PR creation normally starts it; '
+                  'workflow approval, merge conflicts, or a missing workflow can prevent a run from starting.')
     elif run['status'] != 'completed':
         status = f'The latest runtime build/report run is **{run["status"]}**. No new complete consumer report is available yet.'
     elif run['conclusion'] == 'success' and payload is not None:
@@ -156,34 +113,34 @@ def comment_body(pr: dict, run: dict | None, payload: str | None, previous: str 
     return header
 
 
-def reconcile(api: GitHub, repository: str, downloader=download_report) -> int:
+def reconcile(api: GitHub, repository: str) -> int:
     repository_name(repository)
     changed = 0
     # The workflow serializes reconciliation repository-wide. Every invocation
     # scans open same-repository PRs, so coalesced pending events cannot strand a
     # different PR. PRs opened after a successful push build are covered as well.
-    for pr in api.pages(f'/repos/{repository}/pulls', state='open'):
+    for pr in api.iter_pull_requests(repository, state='open'):
         if not same_repo_pr(pr, repository):
             continue
         run = latest_run(api, repository, pr)
-        comments = list(api.pages(f'/repos/{repository}/issues/{pr["number"]}/comments'))
+        comments = list(api.iter_pull_request_comments(repository, pr['number']))
         previous = owned_comment(comments)
         payload = None
         error = None
         if run and run['status'] == 'completed' and run['conclusion'] == 'success':
             try:
                 name = f'consumer-update-{run["run_attempt"]}'
-                artifacts = api.request('GET', f'/repos/{repository}/actions/runs/{run["id"]}/artifacts?'
-                                        + urlencode({'name': name, 'per_page': 100}))['artifacts']
+                artifacts = api.iter_run_artifacts(repository, run['id'], name=name)
                 matches = [item for item in artifacts if item['name'] == name and not item['expired']]
                 if len(matches) != 1:
                     raise ValueError('No unique unexpired report artifact for this attempt')
-                payload = decode_report(downloader(api, repository, matches[0]['id']), repository, run)
+                content = api.download_artifact_archive(repository, matches[0]['id'], max_bytes=MAX_ARCHIVE)
+                payload = decode_report(content, repository, run)
             except (OSError, ValueError, RuntimeError, KeyError, zipfile.BadZipFile) as failure:
                 error = str(failure)
         # Event payloads and run completion order are not authoritative. Refresh
         # both PR head and newest run before writing, including rerun attempts.
-        current = api.request('GET', f'/repos/{repository}/pulls/{pr["number"]}')
+        current = api.get_pull_request(repository, pr['number'])
         if not same_repo_pr(current, repository) or current['head']['sha'] != pr['head']['sha']:
             continue
         if run_stamp(latest_run(api, repository, current)) != run_stamp(run):
@@ -192,9 +149,9 @@ def reconcile(api: GitHub, repository: str, downloader=download_report) -> int:
         if previous and previous['body'] == body:
             continue
         if previous:
-            api.request('PATCH', f'/repos/{repository}/issues/comments/{previous["id"]}', {'body': body})
+            api.update_pull_request_comment(repository, previous['id'], body)
         else:
-            api.request('POST', f'/repos/{repository}/issues/{pr["number"]}/comments', {'body': body})
+            api.create_pull_request_comment(repository, pr['number'], body)
         changed += 1
     return changed
 

@@ -6,12 +6,14 @@ import json
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import runtime_comments as comments
+from github_api import GitHub
 
 A, B, C = 'a' * 40, 'b' * 40, 'c' * 40
 REPO = 'example/core'
@@ -21,9 +23,9 @@ def pr(head=A, number=7, repository=REPO):
     return {'number': number, 'state': 'open', 'head': {'sha': head, 'ref': 'feature/update', 'repo': {'full_name': repository}}}
 
 
-def run(head=A, id=123, attempt=1, status='completed', conclusion='success', repository=REPO):
+def run(head=A, id=123, attempt=1, status='completed', conclusion='success', repository=REPO, event='push'):
     return {'id': id, 'run_attempt': attempt, 'head_sha': head, 'head_branch': 'feature/update',
-            'head_repository': {'full_name': repository}, 'event': 'push', 'status': status, 'conclusion': conclusion,
+            'head_repository': {'full_name': repository}, 'event': event, 'status': status, 'conclusion': conclusion,
             'html_url': f'https://github.com/{REPO}/actions/runs/{id}'}
 
 
@@ -65,37 +67,49 @@ class FakeApi:
         self.expired = False
         self.missing_report = False
 
-    def pages(self, path, **params):
-        self.calls.append(('GET pages', path))
-        if path.endswith('/pulls'):
-            return iter(copy.deepcopy(self.pull_requests))
-        if path.endswith('/comments'):
-            return iter(copy.deepcopy(self.comments))
-        raise AssertionError(path)
+    def iter_pull_requests(self, repository, *, state):
+        self.calls.append(('iter_pull_requests', repository, state))
+        return iter(copy.deepcopy(self.pull_requests))
 
-    def request(self, method, path, data=None):
-        self.calls.append((method, path))
-        if method in ('PATCH', 'POST'):
-            self.writes.append((method, path, data))
-            return {'id': 42}
-        if '/actions/workflows/build.yml/runs?' in path:
-            self.run_reads += 1
-            if self.run_reads > 1 and self.fresh_run:
-                return {'workflow_runs': self.fresh_run}
-            return {'workflow_runs': copy.deepcopy(self.runs)}
-        if '/actions/runs/' in path and '/artifacts?' in path:
-            name = parse_qs(urlparse(path).query)['name'][0]
-            return {'artifacts': [] if self.missing_report else [
-                {'id': 91, 'name': name, 'expired': self.expired},
-                {'id': 90, 'name': 'consumer-update-0', 'expired': False},
-            ]}
-        if '/pulls/' in path:
-            number = int(path.rsplit('/', 1)[1])
-            value = copy.deepcopy(next(p for p in self.pull_requests if p['number'] == number))
-            if self.fresh_head:
-                value['head']['sha'] = self.fresh_head
-            return value
-        raise AssertionError((method, path))
+    def iter_pull_request_comments(self, repository, number):
+        self.calls.append(('iter_pull_request_comments', repository, number))
+        return iter(copy.deepcopy(self.comments))
+
+    def iter_build_runs(self, repository, *, branch, head_sha):
+        self.calls.append(('iter_build_runs', repository, branch, head_sha))
+        self.run_reads += 1
+        if self.run_reads > 1 and self.fresh_run:
+            return iter(copy.deepcopy(self.fresh_run))
+        return iter(copy.deepcopy(self.runs))
+
+    def iter_run_artifacts(self, repository, run_id, *, name):
+        self.calls.append(('iter_run_artifacts', repository, run_id, name))
+        return iter([] if self.missing_report else [
+            {'id': 91, 'name': name, 'expired': self.expired},
+            {'id': 90, 'name': 'consumer-update-0', 'expired': False},
+        ])
+
+    def download_artifact_archive(self, repository, artifact_id, *, max_bytes):
+        self.calls.append(('download_artifact_archive', repository, artifact_id, max_bytes))
+        assert artifact_id == 91 and max_bytes == comments.MAX_ARCHIVE
+        return self.report
+
+    def get_pull_request(self, repository, number):
+        self.calls.append(('get_pull_request', repository, number))
+        value = copy.deepcopy(next(p for p in self.pull_requests if p['number'] == number))
+        if self.fresh_head:
+            value['head']['sha'] = self.fresh_head
+        return value
+
+    def update_pull_request_comment(self, repository, comment_id, body):
+        self.calls.append(('update_pull_request_comment', repository, comment_id))
+        self.writes.append(('update_pull_request_comment', comment_id, {'body': body}))
+        return {'id': comment_id}
+
+    def create_pull_request_comment(self, repository, number, body):
+        self.calls.append(('create_pull_request_comment', repository, number))
+        self.writes.append(('create_pull_request_comment', number, {'body': body}))
+        return {'id': 42}
 
 
 class ReportDecoder(unittest.TestCase):
@@ -149,7 +163,8 @@ class ReportDecoder(unittest.TestCase):
 class CommentReconciliation(unittest.TestCase):
     def reconcile(self, api, workflow=None):
         workflow = workflow or (api.runs[0] if api.runs else run())
-        return comments.reconcile(api, REPO, lambda *_: archive_for(workflow))
+        api.report = archive_for(workflow)
+        return comments.reconcile(api, REPO)
 
     def test_pr_opened_after_build_gets_its_existing_result(self):
         api = FakeApi(runs=[run()])
@@ -163,8 +178,8 @@ class CommentReconciliation(unittest.TestCase):
         pending = comments.comment_body(pr(), run(status='in_progress'), None)
         api = FakeApi(runs=[run()], existing=[bot_comment(pending)])
         self.reconcile(api)
-        self.assertEqual(api.writes[0][0], 'PATCH')
-        self.assertEqual(api.writes[0][1], '/repos/example/core/issues/comments/42')
+        self.assertEqual(api.writes[0][0], 'update_pull_request_comment')
+        self.assertEqual(api.writes[0][1], 42)
 
     def test_identical_report_causes_no_write(self):
         body = comments.comment_body(pr(), run(), payload())
@@ -176,7 +191,7 @@ class CommentReconciliation(unittest.TestCase):
         other['user'] = {'login': 'someone', 'type': 'User'}
         api = FakeApi(runs=[run()], existing=[other])
         self.reconcile(api)
-        self.assertEqual(api.writes[0][0], 'POST')
+        self.assertEqual(api.writes[0][0], 'create_pull_request_comment')
 
     def test_new_head_marks_previous_success_as_previous_not_current(self):
         old = comments.comment_body(pr(A), run(A), payload(A))
@@ -199,7 +214,7 @@ class CommentReconciliation(unittest.TestCase):
     def test_rerun_attempt_has_its_own_report_identity(self):
         api = FakeApi(runs=[run(attempt=2)])
         self.reconcile(api)
-        self.assertTrue(any('name=consumer-update-2' in path for _, path in api.calls))
+        self.assertIn(('iter_run_artifacts', REPO, 123, 'consumer-update-2'), api.calls)
         self.assertIn('(attempt 2)', api.writes[0][2]['body'])
 
     def test_older_attempt_archive_is_not_accepted_for_new_rerun(self):
@@ -209,21 +224,22 @@ class CommentReconciliation(unittest.TestCase):
         self.assertNotIn('npm install', api.writes[0][2]['body'])
 
     def test_latest_run_search_includes_later_pages(self):
-        class PagedApi:
-            def request(self, method, path):
-                page = int(parse_qs(urlparse(path).query)['page'][0])
-                entries = [{**run(id=200 + i), 'run_started_at': '2026-09-22T10:00:00Z'} for i in range(100)]
-                if page == 2:
-                    entries = [{**run(id=100, attempt=3), 'run_started_at': '2026-09-22T12:00:00Z'}]
-                return {'workflow_runs': entries, 'total_count': 101}
-        self.assertEqual(comments.latest_run(PagedApi(), REPO, pr())['id'], 100)
+        def response(method, path):
+            page = int(parse_qs(urlparse(path).query)['page'][0])
+            entries = [{**run(id=200 + i), 'run_started_at': '2026-09-22T10:00:00Z'} for i in range(100)]
+            if page == 2:
+                entries = [{**run(id=100, attempt=3), 'run_started_at': '2026-09-22T12:00:00Z'}]
+            return {'workflow_runs': entries, 'total_count': 101}
+        api = GitHub(token='fixture-token')
+        with patch.object(api, '_request', side_effect=response) as request:
+            self.assertEqual(comments.latest_run(api, REPO, pr())['id'], 100)
+        self.assertEqual(request.call_count, 2)
 
     def test_incomplete_filtered_build_history_is_rejected(self):
-        class OverflowApi:
-            def request(self, method, path):
-                return {'workflow_runs': [], 'total_count': 1001}
-        with self.assertRaisesRegex(ValueError, 'Too many matching'):
-            comments.latest_run(OverflowApi(), REPO, pr())
+        api = GitHub(token='fixture-token')
+        with patch.object(api, '_request', return_value={'workflow_runs': [], 'total_count': 1001}):
+            with self.assertRaisesRegex(ValueError, 'Too many matching'):
+                comments.latest_run(api, REPO, pr())
 
     def test_rerun_of_an_older_run_id_can_be_the_newest_attempt(self):
         old_rerun = {**run(id=120, attempt=2), 'run_started_at': '2026-09-22T12:00:00Z'}
@@ -234,10 +250,47 @@ class CommentReconciliation(unittest.TestCase):
         self.assertIn('/actions/runs/120', api.writes[0][2]['body'])
 
     def test_fork_and_non_source_event_runs_are_ignored(self):
-        for wrong in [run(repository='attacker/core'), {**run(), 'event': 'pull_request'}]:
+        for wrong in [run(repository='attacker/core'), {**run(), 'event': 'pull_request_target'}]:
             api = FakeApi(runs=[wrong])
             self.reconcile(api)
             self.assertIn('No matching runtime build', api.writes[0][2]['body'])
+
+    def test_human_opened_pr_build_produces_the_runtime_comment(self):
+        api = FakeApi(runs=[run(event='pull_request')])
+        self.assertEqual(self.reconcile(api), 1)
+        body = api.writes[0][2]['body']
+        self.assertIn('succeeded for this PR head', body)
+        self.assertIn('npm install', body)
+        self.assertIn('```yaml', body)
+
+    def test_push_and_synchronize_runs_are_both_eligible_without_deduplication(self):
+        for event in ('push', 'pull_request'):
+            with self.subTest(latest=event):
+                earlier = run(id=120, event='pull_request' if event == 'push' else 'push')
+                later = run(id=123, event=event)
+                api = FakeApi(runs=[earlier, later])
+                self.reconcile(api, workflow=later)
+                self.assertIn('/actions/runs/123', api.writes[0][2]['body'])
+                self.assertIn('succeeded for this PR head', api.writes[0][2]['body'])
+
+    def test_pr_run_report_cannot_substitute_a_synthetic_merge_commit(self):
+        workflow = run(event='pull_request')
+        with self.assertRaisesRegex(ValueError, 'identity'):
+            comments.decode_report(archive_for(workflow, {'sourceCommit': B}), REPO, workflow)
+
+    def test_no_run_status_explains_human_pr_trigger_not_bot_dispatch(self):
+        api = FakeApi(runs=[])
+        self.reconcile(api)
+        body = api.writes[0][2]['body']
+        self.assertIn('Human PR creation normally starts it', body)
+        self.assertNotIn('explicit build dispatch', body)
+        self.assertNotIn('succeeded for this PR head', body)
+
+    def test_pr_run_for_an_old_head_is_not_reported_as_current(self):
+        api = FakeApi(pull_requests=[pr(B)], runs=[run(A, event='pull_request')])
+        self.reconcile(api)
+        self.assertIn('No matching runtime build', api.writes[0][2]['body'])
+        self.assertNotIn('npm install', api.writes[0][2]['body'])
 
     def test_fork_pr_is_not_processed(self):
         api = FakeApi(pull_requests=[pr(repository='fork/core')], runs=[run()])
