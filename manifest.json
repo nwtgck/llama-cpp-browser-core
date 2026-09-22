@@ -1,7 +1,7 @@
 {
   "formatVersion": 2,
-  "sourceCommit": "f958de49600d7a59f857b6e618fd3c7f8dc5cb2b",
-  "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+  "sourceCommit": "346073443736217a252ebf493c6fea47cb872c3a",
+  "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
   "profiles": {
     "cpu-wasm32": {
       "variants": {
@@ -20,11 +20,11 @@
             "assertions": 0,
             "environment": "web,worker"
           },
-          "sourceCommit": "f958de49600d7a59f857b6e618fd3c7f8dc5cb2b",
+          "sourceCommit": "346073443736217a252ebf493c6fea47cb872c3a",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
-          "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+          "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
           "toolchain": {
             "emsdkVersion": "6.0.9",
             "emscriptenRelease": "f04ea239d533260dd1db760dd2d668d5f9a88d6b",
@@ -32,7 +32,7 @@
               "sourceSha256": "b32ed147daafc5406faf23d1dee1410c2ae2b78b6b68f0e1b0c425f812970e1b",
               "patchedSha256": "5722ee92c126e28d71595e3524ee1ba411fd90bc5a5ad55010f57df690de66d5"
             },
-            "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+            "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
             "nodeVersion": "22.16.0",
             "artifactBranch": "artifacts",
             "dawnTag": "v20260908.214631",
@@ -57,7 +57,7 @@
             "-DLCB_ASYNCIFY=OFF",
             "-DLCB_MAXIMUM_MEMORY=4294967296"
           ],
-          "builtAtUnix": 1790085642,
+          "builtAtUnix": 1790085853,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -97,11 +97,11 @@
             "assertions": 1,
             "environment": "web,worker,node"
           },
-          "sourceCommit": "f958de49600d7a59f857b6e618fd3c7f8dc5cb2b",
+          "sourceCommit": "346073443736217a252ebf493c6fea47cb872c3a",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
-          "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+          "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
           "toolchain": {
             "emsdkVersion": "6.0.9",
             "emscriptenRelease": "f04ea239d533260dd1db760dd2d668d5f9a88d6b",
@@ -109,7 +109,7 @@
               "sourceSha256": "b32ed147daafc5406faf23d1dee1410c2ae2b78b6b68f0e1b0c425f812970e1b",
               "patchedSha256": "5722ee92c126e28d71595e3524ee1ba411fd90bc5a5ad55010f57df690de66d5"
             },
-            "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+            "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
             "nodeVersion": "22.16.0",
             "artifactBranch": "artifacts",
             "dawnTag": "v20260908.214631",
@@ -134,7 +134,7 @@
             "-DLCB_ASYNCIFY=OFF",
             "-DLCB_MAXIMUM_MEMORY=4294967296"
           ],
-          "builtAtUnix": 1790085627,
+          "builtAtUnix": 1790085877,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -178,11 +178,11 @@
             "assertions": 0,
             "environment": "web,worker"
           },
-          "sourceCommit": "f958de49600d7a59f857b6e618fd3c7f8dc5cb2b",
+          "sourceCommit": "346073443736217a252ebf493c6fea47cb872c3a",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
-          "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+          "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
           "toolchain": {
             "emsdkVersion": "6.0.9",
             "emscriptenRelease": "f04ea239d533260dd1db760dd2d668d5f9a88d6b",
@@ -190,7 +190,7 @@
               "sourceSha256": "b32ed147daafc5406faf23d1dee1410c2ae2b78b6b68f0e1b0c425f812970e1b",
               "patchedSha256": "5722ee92c126e28d71595e3524ee1ba411fd90bc5a5ad55010f57df690de66d5"
             },
-            "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+            "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
             "nodeVersion": "22.16.0",
             "artifactBranch": "artifacts",
             "dawnTag": "v20260908.214631",
@@ -215,7 +215,7 @@
             "-DLCB_ASYNCIFY=OFF",
             "-DLCB_MAXIMUM_MEMORY=17179869184"
           ],
-          "builtAtUnix": 1790085600,
+          "builtAtUnix": 1790085979,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -255,11 +255,11 @@
             "assertions": 1,
             "environment": "web,worker,node"
           },
-          "sourceCommit": "f958de49600d7a59f857b6e618fd3c7f8dc5cb2b",
+          "sourceCommit": "346073443736217a252ebf493c6fea47cb872c3a",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
-          "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+          "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
           "toolchain": {
             "emsdkVersion": "6.0.9",
             "emscriptenRelease": "f04ea239d533260dd1db760dd2d668d5f9a88d6b",
@@ -267,7 +267,7 @@
               "sourceSha256": "b32ed147daafc5406faf23d1dee1410c2ae2b78b6b68f0e1b0c425f812970e1b",
               "patchedSha256": "5722ee92c126e28d71595e3524ee1ba411fd90bc5a5ad55010f57df690de66d5"
             },
-            "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+            "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
             "nodeVersion": "22.16.0",
             "artifactBranch": "artifacts",
             "dawnTag": "v20260908.214631",
@@ -292,7 +292,7 @@
             "-DLCB_ASYNCIFY=OFF",
             "-DLCB_MAXIMUM_MEMORY=17179869184"
           ],
-          "builtAtUnix": 1790085653,
+          "builtAtUnix": 1790085921,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -336,11 +336,11 @@
             "assertions": 0,
             "environment": "web,worker"
           },
-          "sourceCommit": "f958de49600d7a59f857b6e618fd3c7f8dc5cb2b",
+          "sourceCommit": "346073443736217a252ebf493c6fea47cb872c3a",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
-          "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+          "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
           "toolchain": {
             "emsdkVersion": "6.0.9",
             "emscriptenRelease": "f04ea239d533260dd1db760dd2d668d5f9a88d6b",
@@ -348,7 +348,7 @@
               "sourceSha256": "b32ed147daafc5406faf23d1dee1410c2ae2b78b6b68f0e1b0c425f812970e1b",
               "patchedSha256": "5722ee92c126e28d71595e3524ee1ba411fd90bc5a5ad55010f57df690de66d5"
             },
-            "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+            "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
             "nodeVersion": "22.16.0",
             "artifactBranch": "artifacts",
             "dawnTag": "v20260908.214631",
@@ -374,7 +374,7 @@
             "-DLCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790085720,
+          "builtAtUnix": 1790085997,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -405,11 +405,11 @@
             "assertions": 1,
             "environment": "web,worker,node"
           },
-          "sourceCommit": "f958de49600d7a59f857b6e618fd3c7f8dc5cb2b",
+          "sourceCommit": "346073443736217a252ebf493c6fea47cb872c3a",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
-          "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+          "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
           "toolchain": {
             "emsdkVersion": "6.0.9",
             "emscriptenRelease": "f04ea239d533260dd1db760dd2d668d5f9a88d6b",
@@ -417,7 +417,7 @@
               "sourceSha256": "b32ed147daafc5406faf23d1dee1410c2ae2b78b6b68f0e1b0c425f812970e1b",
               "patchedSha256": "5722ee92c126e28d71595e3524ee1ba411fd90bc5a5ad55010f57df690de66d5"
             },
-            "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+            "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
             "nodeVersion": "22.16.0",
             "artifactBranch": "artifacts",
             "dawnTag": "v20260908.214631",
@@ -443,7 +443,7 @@
             "-DLCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790085726,
+          "builtAtUnix": 1790085994,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -478,11 +478,11 @@
             "assertions": 0,
             "environment": "web,worker"
           },
-          "sourceCommit": "f958de49600d7a59f857b6e618fd3c7f8dc5cb2b",
+          "sourceCommit": "346073443736217a252ebf493c6fea47cb872c3a",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
-          "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+          "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
           "toolchain": {
             "emsdkVersion": "6.0.9",
             "emscriptenRelease": "f04ea239d533260dd1db760dd2d668d5f9a88d6b",
@@ -490,7 +490,7 @@
               "sourceSha256": "b32ed147daafc5406faf23d1dee1410c2ae2b78b6b68f0e1b0c425f812970e1b",
               "patchedSha256": "5722ee92c126e28d71595e3524ee1ba411fd90bc5a5ad55010f57df690de66d5"
             },
-            "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+            "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
             "nodeVersion": "22.16.0",
             "artifactBranch": "artifacts",
             "dawnTag": "v20260908.214631",
@@ -516,7 +516,7 @@
             "-DLCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790085646,
+          "builtAtUnix": 1790085924,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -547,11 +547,11 @@
             "assertions": 1,
             "environment": "web,worker,node"
           },
-          "sourceCommit": "f958de49600d7a59f857b6e618fd3c7f8dc5cb2b",
+          "sourceCommit": "346073443736217a252ebf493c6fea47cb872c3a",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
-          "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+          "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
           "toolchain": {
             "emsdkVersion": "6.0.9",
             "emscriptenRelease": "f04ea239d533260dd1db760dd2d668d5f9a88d6b",
@@ -559,7 +559,7 @@
               "sourceSha256": "b32ed147daafc5406faf23d1dee1410c2ae2b78b6b68f0e1b0c425f812970e1b",
               "patchedSha256": "5722ee92c126e28d71595e3524ee1ba411fd90bc5a5ad55010f57df690de66d5"
             },
-            "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+            "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
             "nodeVersion": "22.16.0",
             "artifactBranch": "artifacts",
             "dawnTag": "v20260908.214631",
@@ -585,7 +585,7 @@
             "-DLCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790085626,
+          "builtAtUnix": 1790085976,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -620,11 +620,11 @@
             "assertions": 0,
             "environment": "web,worker"
           },
-          "sourceCommit": "f958de49600d7a59f857b6e618fd3c7f8dc5cb2b",
+          "sourceCommit": "346073443736217a252ebf493c6fea47cb872c3a",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
-          "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+          "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
           "toolchain": {
             "emsdkVersion": "6.0.9",
             "emscriptenRelease": "f04ea239d533260dd1db760dd2d668d5f9a88d6b",
@@ -632,7 +632,7 @@
               "sourceSha256": "b32ed147daafc5406faf23d1dee1410c2ae2b78b6b68f0e1b0c425f812970e1b",
               "patchedSha256": "5722ee92c126e28d71595e3524ee1ba411fd90bc5a5ad55010f57df690de66d5"
             },
-            "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+            "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
             "nodeVersion": "22.16.0",
             "artifactBranch": "artifacts",
             "dawnTag": "v20260908.214631",
@@ -658,7 +658,7 @@
             "-DLCB_MAXIMUM_MEMORY=17179869184",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790085657,
+          "builtAtUnix": 1790085910,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -689,11 +689,11 @@
             "assertions": 1,
             "environment": "web,worker,node"
           },
-          "sourceCommit": "f958de49600d7a59f857b6e618fd3c7f8dc5cb2b",
+          "sourceCommit": "346073443736217a252ebf493c6fea47cb872c3a",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
-          "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+          "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
           "toolchain": {
             "emsdkVersion": "6.0.9",
             "emscriptenRelease": "f04ea239d533260dd1db760dd2d668d5f9a88d6b",
@@ -701,7 +701,7 @@
               "sourceSha256": "b32ed147daafc5406faf23d1dee1410c2ae2b78b6b68f0e1b0c425f812970e1b",
               "patchedSha256": "5722ee92c126e28d71595e3524ee1ba411fd90bc5a5ad55010f57df690de66d5"
             },
-            "llamaCommit": "737e0980fef1c2d573afedc8b00f7caf30617652",
+            "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
             "nodeVersion": "22.16.0",
             "artifactBranch": "artifacts",
             "dawnTag": "v20260908.214631",
@@ -727,7 +727,7 @@
             "-DLCB_MAXIMUM_MEMORY=17179869184",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790085605,
+          "builtAtUnix": 1790085901,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -1224,8 +1224,8 @@
     },
     {
       "path": "profiles/cpu-wasm32/browser/core.wasm",
-      "bytes": 5999921,
-      "sha256": "96d3c2e4df3bab483977a335c1c6718aecf43b186bf92a0ab11ddd855d323259"
+      "bytes": 5986871,
+      "sha256": "4416b059542b3ee90cc656f2f380049cd2a040cdf7e4f14227974081aa8c4873"
     },
     {
       "path": "profiles/cpu-wasm32/test/core.d.ts",
@@ -1239,8 +1239,8 @@
     },
     {
       "path": "profiles/cpu-wasm32/test/core.wasm",
-      "bytes": 6156407,
-      "sha256": "a272d635704ba145a6fbf7f07bb41618086e481326540d18cf2dfc33ada7eeab"
+      "bytes": 6143214,
+      "sha256": "e9fc33ae1a3e4fdd0dff8682531ef203fca852b724ac5b3b1082748695c7a0bb"
     },
     {
       "path": "profiles/cpu-wasm64/browser/core.d.ts",
@@ -1254,8 +1254,8 @@
     },
     {
       "path": "profiles/cpu-wasm64/browser/core.wasm",
-      "bytes": 6124193,
-      "sha256": "fb309c001d200a5a8e1865cf0abe7d463c4e169c105f518f17e59910883eb8b7"
+      "bytes": 6110701,
+      "sha256": "3b95002da77f286555be063f20aa092f4aab70025318abe925e95a1d33420723"
     },
     {
       "path": "profiles/cpu-wasm64/test/core.d.ts",
@@ -1269,8 +1269,8 @@
     },
     {
       "path": "profiles/cpu-wasm64/test/core.wasm",
-      "bytes": 6285868,
-      "sha256": "bde65bfcf92bdb18da3bc8eb894f302a45d38ab435e14a546387fa7b56a59da9"
+      "bytes": 6272259,
+      "sha256": "36b9033b6d1befd34d5a07b4e279109c4fe7c82b5a3a5b287a484716198db9e3"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/browser/core.d.ts",
@@ -1279,13 +1279,13 @@
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/browser/core.mjs",
-      "bytes": 305191,
-      "sha256": "0bef53602f8502b81779f460e28770057f48d1665238b3537fb943a0fc0cc532"
+      "bytes": 305467,
+      "sha256": "77fa9a52ec1305caf8e585109cc14287b579b608d60bbab0577534323d8c24c5"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/browser/core.wasm",
-      "bytes": 13983974,
-      "sha256": "d8dafb3a61fa28d987d0ef025707ef63e89b4c6e4aa0f64585e1041bf7ed4c4c"
+      "bytes": 13952934,
+      "sha256": "d949e87856d0a2e47b15c876ac2d870a9e1b1e5a72aa79a555393af088daeaa6"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/test/core.d.ts",
@@ -1294,13 +1294,13 @@
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/test/core.mjs",
-      "bytes": 657329,
-      "sha256": "912079a5a518bca58df34efe748d25e6670f5d7c39e16dfdd0882de065eac100"
+      "bytes": 657790,
+      "sha256": "3e47025fdde155a48c93e28e82cff470c7b6a41c3d119a2761db6289cc88c2d5"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/test/core.wasm",
-      "bytes": 14231530,
-      "sha256": "61c5881b685cfc74a7d1b8339f07569f629a5f7190bebf2b3a164d7877ce9fad"
+      "bytes": 14200368,
+      "sha256": "4b9bd2e60b2ff0d27a6e5f41c563bdf90dd4599930d046aa6be663ce59e123c6"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/browser/core.d.ts",
@@ -1314,8 +1314,8 @@
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/browser/core.wasm",
-      "bytes": 7868263,
-      "sha256": "8ea80cff58eb529a31f166628c7797f83142300f01941cf8e0bfb9d2c07589ee"
+      "bytes": 7855163,
+      "sha256": "7a48f553273127f0092bf11d03c17aa625cc88dd5d050cdbcdb818de9405ba5e"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/test/core.d.ts",
@@ -1329,8 +1329,8 @@
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/test/core.wasm",
-      "bytes": 8042635,
-      "sha256": "9782d0eb24b96d668d2c7bb9f726fc3d8b7b34ab98742884f6708ac06c99a2c3"
+      "bytes": 8029438,
+      "sha256": "913711fc78a9d68cdd1c9ea01fcea1e1df62d4ca74836ba26fdbc8797c96b144"
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/browser/core.d.ts",
@@ -1344,8 +1344,8 @@
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/browser/core.wasm",
-      "bytes": 8027215,
-      "sha256": "e492f5b73ed75ea70f330e18febe90d43a624e3ae2bc2e67e97e10f686fcb507"
+      "bytes": 8013706,
+      "sha256": "a0cc6a4b9d884097b1c31f536e25f53dde0957eb81202f49c80c381f96dd386c"
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/test/core.d.ts",
@@ -1359,8 +1359,8 @@
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/test/core.wasm",
-      "bytes": 8206061,
-      "sha256": "a72e74ef4236203db296d62eda81c68e1a230fc63e20063c9bbf75c8c4640aca"
+      "bytes": 8192418,
+      "sha256": "142ac76583a47c8777e604cb919485ec9716031d4b2c695df80a8ab11a639d49"
     }
   ]
 }
