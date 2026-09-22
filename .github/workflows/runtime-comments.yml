@@ -1,0 +1,39 @@
+name: Report runtime artifacts on PRs
+
+on:
+  workflow_run:
+    workflows: ['Build and publish runtime']
+    types: [requested, in_progress, completed]
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+# Every invocation reconciles all open same-repository PRs, not just the event's
+# PR. Coalescing pending events therefore does not discard a different PR's work.
+concurrency:
+  group: runtime-pr-comment-reconciliation
+  cancel-in-progress: false
+
+jobs:
+  report:
+    if: >-
+      (github.event_name != 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # This privileged reporter never checks out a PR head, installs its
+          # dependencies, evaluates its YAML, or executes downloaded artifacts.
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Reconcile source-bound runtime comments
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/runtime_comments.py

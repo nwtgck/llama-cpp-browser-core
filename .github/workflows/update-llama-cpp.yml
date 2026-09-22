@@ -1,0 +1,58 @@
+name: Update llama.cpp
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Upstream channel (latest is stable; latest-unstable is a released nightly)'
+        type: choice
+        options: [latest, latest-unstable, custom]
+        default: latest
+        required: true
+      custom_ref:
+        description: 'Only for custom: upstream tag, branch, or full 40-character commit SHA'
+        type: string
+        default: ''
+      allow_non_fast_forward:
+        description: 'Explicitly allow an older or divergent upstream revision'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    if: github.ref_type == 'branch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Resolve upstream, propose pins, and request the runtime build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ inputs.target }}
+          CUSTOM_REF: ${{ inputs.custom_ref }}
+          BASE: ${{ github.ref_name }}
+          ALLOW_NON_FAST_FORWARD: ${{ inputs.allow_non_fast_forward }}
+        shell: bash
+        run: |
+          extra=()
+          if [[ "$ALLOW_NON_FAST_FORWARD" == "true" ]]; then
+            extra+=(--allow-non-fast-forward)
+          fi
+          python3 scripts/update_llama_cpp.py --target "$TARGET" --custom-ref "$CUSTOM_REF" --base "$BASE" "${extra[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upstream-update-report
+          path: build/upstream-update/
+          if-no-files-found: ignore
+          retention-days: 14

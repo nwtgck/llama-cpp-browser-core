@@ -68,3 +68,10 @@ Reproducible tests and CI verification logic belong in the source repository. Pe
 ## Retention
 
 Consumers may depend on older artifact hashes, so do not delete or replace artifact history. Binary history still occupies space in the shared repository even when source branches contain no binaries. Limit fetch scope and depth where appropriate, and only compact storage in ways that preserve referenced commits.
+
+## Update automation and consumer reporting
+
+[Upstream updates and consumer reports](update-automation.md) describes the
+browser-only stable/nightly/custom updater, artifact publication before PR
+merge, exact npm lock fragments, compact consumer YAML and source-aware PR
+comments. Reporting is outside the runtime package and does not change its format.

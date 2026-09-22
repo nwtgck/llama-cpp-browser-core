@@ -6,6 +6,11 @@ on:
       - artifacts
       - 'artifacts/**'
   workflow_dispatch:
+    inputs:
+      expected_source:
+        description: 'Optional source SHA guard used by the upstream updater'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -24,6 +29,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
+      - name: Verify the dispatched source identity
+        env:
+          EXPECTED_SOURCE: ${{ inputs.expected_source }}
+        shell: bash
+        run: |
+          if [[ -n "$EXPECTED_SOURCE" && "$GITHUB_SHA" != "$EXPECTED_SOURCE" ]]; then
+            echo 'The source branch changed after dispatch was requested; publication is blocked.' >&2
+            exit 1
+          fi
       - name: Test host and publication code
         run: |
           npm test
@@ -161,6 +175,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          submodules: recursive
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -174,3 +189,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/publish_artifacts.py --package dist/package --remote "https://github.com/${GITHUB_REPOSITORY}.git"
+      - name: Generate npm lock and consumer integration metadata
+        env:
+          ARTIFACT_COMMIT: ${{ steps.publish.outputs.commit }}
+        run: python3 scripts/consumer_metadata.py --package dist/package --commit "$ARTIFACT_COMMIT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: consumer-update-${{ github.run_attempt }}
+          path: build/consumer-update/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Preserve publication status after a reporting failure
+        if: failure() && steps.publish.outputs.commit != ''
+        env:
+          ARTIFACT_COMMIT: ${{ steps.publish.outputs.commit }}
+        run: |
+          echo "Runtime artifact $ARTIFACT_COMMIT is already published; consumer reporting failed." >> "$GITHUB_STEP_SUMMARY"
