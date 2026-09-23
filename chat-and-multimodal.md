@@ -168,3 +168,12 @@ still use F16 intermediate storage, so this is not full-F32 arithmetic. Native
 and byte totals, not paths or tensor values. Real-model speed and quality must be
 validated separately; the workaround does not guarantee GPU placement for all
 operations or sizes.
+
+## Upstream audio generation boundary
+
+The core exposes the pinned upstream audio helper without a downstream language
+capability query or waveform-tail optimization. Manual language selection and the
+upstream model default remain available through the existing input contract;
+features in another reference implementation do not imply llama.cpp support.
+The single-thread reference-audio preprocessing workaround is a separate retained
+compatibility exception. See the [exception register](../upstream-patches-only-as-a-last-resort-with-explicit-user-approval/README.md).
