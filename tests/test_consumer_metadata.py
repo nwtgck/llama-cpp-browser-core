@@ -201,14 +201,17 @@ class OverlayProvenance(unittest.TestCase):
         self.vendor = self.root / 'vendor/llama.cpp'
         (self.vendor / 'tools/mtmd').mkdir(parents=True)
         (self.vendor / 'tools/mtmd/clip.cpp').write_text('before\noriginal\nafter\n')
+        (self.vendor / 'tools/mtmd/mtmd-audio.cpp').write_text('before\noriginal\nafter\n')
         toolchain = {'llamaCommit': B, 'emscriptenRelease': A,
                      'emscriptenAsyncifyBigIntPatch': {'sourceSha256': '1' * 64, 'patchedSha256': '2' * 64}}
         for name in ['config', 'patches', 'scripts', 'cmake', 'bridge', 'docs']:
             (self.root / name).mkdir()
         (self.root / 'config/toolchain.json').write_text(json.dumps(toolchain))
         (self.root / 'patches/mtmd-webgpu-bf16.patch').write_text('--- a/clip.cpp\n+++ b/clip.cpp\n@@ -1,3 +1,3 @@\n before\n-original\n+patched\n after\n')
+        (self.root / 'patches/mtmd-audio-single-thread.patch').write_text((self.root / 'patches/mtmd-webgpu-bf16.patch').read_text().replace('clip.cpp', 'mtmd-audio.cpp'))
         for path in ['scripts/prepare_mtmd.py', 'cmake/MtmdOverlay.cmake', 'bridge/mtmd-bf16.h',
-                     'docs/webgpu-bf16-projector.md', 'scripts/patch_emscripten.py']:
+                     'docs/webgpu-bf16-projector.md', 'scripts/patch_emscripten.py',
+                     'cmake/MtmdAudioOverlay.cmake', 'docs/audio-single-thread.md']:
             (self.root / path).write_text('Provenance fixture: ' + path + '\n')
         self.manifest = {'sourceCommit': A, 'llamaCommit': B, 'profiles': {}}
         for name, enabled in [('cpu-wasm32', False), ('webgpu-wasm64-jspi', True)]:
@@ -229,6 +232,20 @@ class OverlayProvenance(unittest.TestCase):
         self.assertEqual(overlay['application']['enabledProfileVariants'], ['webgpu-wasm64-jspi/browser', 'webgpu-wasm64-jspi/test'])
         self.assertEqual((self.vendor / 'tools/mtmd/clip.cpp').read_text(), 'before\noriginal\nafter\n')
         self.assertIn('toolchainDivergences', result)
+
+    def test_audio_overlay_tracks_both_backends_and_actual_compiled_bytes(self):
+        result = provenance.collect(self.root, self.manifest)
+        audio = next(item for item in result['sourceOverlays'] if item['id'] == 'single-thread-wasm-audio-preprocessing')
+        self.assertEqual(audio['compiledCopy']['sha256'], hashlib.sha256(b'before\npatched\nafter\n').hexdigest())
+        self.assertEqual(audio['application']['enabledProfileVariants'], [
+            'cpu-wasm32/browser', 'cpu-wasm32/test', 'webgpu-wasm64-jspi/browser', 'webgpu-wasm64-jspi/test'])
+        self.assertNotIn('patches/mtmd-audio-single-thread.patch', result['otherPatchFiles'])
+        self.assertEqual((self.vendor / 'tools/mtmd/mtmd-audio.cpp').read_text(), 'before\noriginal\nafter\n')
+
+    def test_audio_overlay_conflict_is_not_hidden_by_a_successful_vision_overlay(self):
+        (self.vendor / 'tools/mtmd/mtmd-audio.cpp').write_text('changed upstream\n')
+        with self.assertRaises(subprocess.CalledProcessError):
+            provenance.collect(self.root, self.manifest)
 
     def test_unknown_patch_files_are_not_silently_omitted(self):
         (self.root / 'patches/another.patch').write_text('Another fixture patch\n')

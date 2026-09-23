@@ -117,7 +117,9 @@ def change_pins(root: Path, commit: str) -> None:
 def overlay_preflight(root: Path) -> dict:
     try:
         with tempfile.TemporaryDirectory(prefix='lcb-update-overlay-') as tmp:
-            prepare(root / 'vendor/llama.cpp', Path(tmp) / 'overlay', root / 'patches/mtmd-webgpu-bf16.patch', capture_output=True)
+            prepare(root / 'vendor/llama.cpp', Path(tmp) / 'vision', root / 'patches/mtmd-webgpu-bf16.patch', capture_output=True)
+            prepare(root / 'vendor/llama.cpp', Path(tmp) / 'audio', root / 'patches/mtmd-audio-single-thread.patch',
+                    capture_output=True, filename='mtmd-audio.cpp')
         return {'status': 'passed', 'scope': 'patch application only; not compilation or inference'}
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         # A failed overlay still leaves a candidate branch for human repair.
