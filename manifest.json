@@ -1,6 +1,6 @@
 {
   "formatVersion": 2,
-  "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
+  "sourceCommit": "5ddaa55d98fd584c94d7a0720b60407e5f38fbe5",
   "llamaCommit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
   "profiles": {
     "cpu-wasm32": {
@@ -20,7 +20,7 @@
             "assertions": 0,
             "environment": "web,worker"
           },
-          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
+          "sourceCommit": "5ddaa55d98fd584c94d7a0720b60407e5f38fbe5",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -57,7 +57,7 @@
             "-DLCB_ASYNCIFY=OFF",
             "-DLCB_MAXIMUM_MEMORY=4294967296"
           ],
-          "builtAtUnix": 1790091649,
+          "builtAtUnix": 1790158962,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -97,7 +97,7 @@
             "assertions": 1,
             "environment": "web,worker,node"
           },
-          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
+          "sourceCommit": "5ddaa55d98fd584c94d7a0720b60407e5f38fbe5",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -134,7 +134,7 @@
             "-DLCB_ASYNCIFY=OFF",
             "-DLCB_MAXIMUM_MEMORY=4294967296"
           ],
-          "builtAtUnix": 1790091627,
+          "builtAtUnix": 1790159002,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -178,7 +178,7 @@
             "assertions": 0,
             "environment": "web,worker"
           },
-          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
+          "sourceCommit": "5ddaa55d98fd584c94d7a0720b60407e5f38fbe5",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -215,7 +215,7 @@
             "-DLCB_ASYNCIFY=OFF",
             "-DLCB_MAXIMUM_MEMORY=17179869184"
           ],
-          "builtAtUnix": 1790091658,
+          "builtAtUnix": 1790159002,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -255,7 +255,7 @@
             "assertions": 1,
             "environment": "web,worker,node"
           },
-          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
+          "sourceCommit": "5ddaa55d98fd584c94d7a0720b60407e5f38fbe5",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -292,7 +292,7 @@
             "-DLCB_ASYNCIFY=OFF",
             "-DLCB_MAXIMUM_MEMORY=17179869184"
           ],
-          "builtAtUnix": 1790091663,
+          "builtAtUnix": 1790158994,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -336,7 +336,7 @@
             "assertions": 0,
             "environment": "web,worker"
           },
-          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
+          "sourceCommit": "5ddaa55d98fd584c94d7a0720b60407e5f38fbe5",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -374,7 +374,7 @@
             "-DLCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790091767,
+          "builtAtUnix": 1790159068,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -405,7 +405,7 @@
             "assertions": 1,
             "environment": "web,worker,node"
           },
-          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
+          "sourceCommit": "5ddaa55d98fd584c94d7a0720b60407e5f38fbe5",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -443,7 +443,7 @@
             "-DLCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790091730,
+          "builtAtUnix": 1790159053,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -478,7 +478,7 @@
             "assertions": 0,
             "environment": "web,worker"
           },
-          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
+          "sourceCommit": "5ddaa55d98fd584c94d7a0720b60407e5f38fbe5",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -516,7 +516,7 @@
             "-DLCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790091692,
+          "builtAtUnix": 1790158994,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -547,7 +547,7 @@
             "assertions": 1,
             "environment": "web,worker,node"
           },
-          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
+          "sourceCommit": "5ddaa55d98fd584c94d7a0720b60407e5f38fbe5",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -585,7 +585,7 @@
             "-DLCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790091636,
+          "builtAtUnix": 1790159015,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -620,7 +620,7 @@
             "assertions": 0,
             "environment": "web,worker"
           },
-          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
+          "sourceCommit": "5ddaa55d98fd584c94d7a0720b60407e5f38fbe5",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -658,7 +658,7 @@
             "-DLCB_MAXIMUM_MEMORY=17179869184",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790091572,
+          "builtAtUnix": 1790158966,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -689,7 +689,7 @@
             "assertions": 1,
             "environment": "web,worker,node"
           },
-          "sourceCommit": "972018af1b9ac03a2358bcf0c2ec4c8b4f317deb",
+          "sourceCommit": "5ddaa55d98fd584c94d7a0720b60407e5f38fbe5",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -727,7 +727,7 @@
             "-DLCB_MAXIMUM_MEMORY=17179869184",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
-          "builtAtUnix": 1790091704,
+          "builtAtUnix": 1790159004,
           "validation": {
             "compiled": true,
             "realModelInference": false,
@@ -784,8 +784,8 @@
     },
     {
       "path": "chat-and-multimodal.md",
-      "bytes": 10473,
-      "sha256": "2991ca28c437e5cc0e51378e22c8af34e01d1c126c96cedccba0c190dc2df278"
+      "bytes": 10648,
+      "sha256": "e58d59a6e20b1bca88bbb1011f9a3f949fdb24f6730e02b27d1943f48a775746"
     },
     {
       "path": "examples/runtime/README.md",
@@ -1224,8 +1224,8 @@
     },
     {
       "path": "profiles/cpu-wasm32/browser/core.wasm",
-      "bytes": 5986871,
-      "sha256": "4416b059542b3ee90cc656f2f380049cd2a040cdf7e4f14227974081aa8c4873"
+      "bytes": 5984650,
+      "sha256": "ecc260eb7b78d71f924efabd21c99cb75fc9126ec9c5031e4455bf519ef41829"
     },
     {
       "path": "profiles/cpu-wasm32/test/core.d.ts",
@@ -1239,8 +1239,8 @@
     },
     {
       "path": "profiles/cpu-wasm32/test/core.wasm",
-      "bytes": 6143214,
-      "sha256": "e9fc33ae1a3e4fdd0dff8682531ef203fca852b724ac5b3b1082748695c7a0bb"
+      "bytes": 6140969,
+      "sha256": "7eafd184eef635682c3394923464b0372eac986ec70c90041b03cba66f381b00"
     },
     {
       "path": "profiles/cpu-wasm64/browser/core.d.ts",
@@ -1254,8 +1254,8 @@
     },
     {
       "path": "profiles/cpu-wasm64/browser/core.wasm",
-      "bytes": 6110701,
-      "sha256": "3b95002da77f286555be063f20aa092f4aab70025318abe925e95a1d33420723"
+      "bytes": 6108514,
+      "sha256": "6a6513515b6e7a0a3cf35bd09fed1fe7c2bc8d72f59ce9175684a80173744e4c"
     },
     {
       "path": "profiles/cpu-wasm64/test/core.d.ts",
@@ -1269,8 +1269,8 @@
     },
     {
       "path": "profiles/cpu-wasm64/test/core.wasm",
-      "bytes": 6272259,
-      "sha256": "36b9033b6d1befd34d5a07b4e279109c4fe7c82b5a3a5b287a484716198db9e3"
+      "bytes": 6270056,
+      "sha256": "f36eb38f96a20aaf6cf584b70bf6ec63db4b15d8efa4dbbd3d242e5bb5478533"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/browser/core.d.ts",
@@ -1279,13 +1279,13 @@
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/browser/core.mjs",
-      "bytes": 305467,
-      "sha256": "77fa9a52ec1305caf8e585109cc14287b579b608d60bbab0577534323d8c24c5"
+      "bytes": 305187,
+      "sha256": "16a9d487506b95a2608c439f732afb69d34913cca74872b2fca03783be44e244"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/browser/core.wasm",
-      "bytes": 13952934,
-      "sha256": "d949e87856d0a2e47b15c876ac2d870a9e1b1e5a72aa79a555393af088daeaa6"
+      "bytes": 13945184,
+      "sha256": "1222e9d36fa0eb3dd35df09bfaae34402bb237ead03918ca54ac5ad5e1f1ff4b"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/test/core.d.ts",
@@ -1295,12 +1295,12 @@
     {
       "path": "profiles/webgpu-wasm32-asyncify/test/core.mjs",
       "bytes": 657790,
-      "sha256": "3e47025fdde155a48c93e28e82cff470c7b6a41c3d119a2761db6289cc88c2d5"
+      "sha256": "7c7a190db3ef2fd2782f6b74dd4f571cb437cbe7b656b2850a59e4a56d4800d9"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/test/core.wasm",
-      "bytes": 14200368,
-      "sha256": "4b9bd2e60b2ff0d27a6e5f41c563bdf90dd4599930d046aa6be663ce59e123c6"
+      "bytes": 14192593,
+      "sha256": "573abc6a9190c84f912855d81e4295281adf938b6dc7a653e9b713443c48520b"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/browser/core.d.ts",
@@ -1314,8 +1314,8 @@
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/browser/core.wasm",
-      "bytes": 7855163,
-      "sha256": "7a48f553273127f0092bf11d03c17aa625cc88dd5d050cdbcdb818de9405ba5e"
+      "bytes": 7852945,
+      "sha256": "7a2e054fbbddd313c02f862aeaee2f47c73e7723aca3558a0afa0f1f38c2210a"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/test/core.d.ts",
@@ -1329,8 +1329,8 @@
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/test/core.wasm",
-      "bytes": 8029438,
-      "sha256": "913711fc78a9d68cdd1c9ea01fcea1e1df62d4ca74836ba26fdbc8797c96b144"
+      "bytes": 8027202,
+      "sha256": "d16323c70dc41ba68491cf18853372b4d4c6f0b2c26f4925b78fe26024a91eeb"
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/browser/core.d.ts",
@@ -1344,8 +1344,8 @@
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/browser/core.wasm",
-      "bytes": 8013706,
-      "sha256": "a0cc6a4b9d884097b1c31f536e25f53dde0957eb81202f49c80c381f96dd386c"
+      "bytes": 8011515,
+      "sha256": "82c1258bf8acc56c20dd63aa4ac6de16a7d4419958e6e50459eb91dae70ed1ed"
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/test/core.d.ts",
@@ -1359,8 +1359,8 @@
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/test/core.wasm",
-      "bytes": 8192418,
-      "sha256": "142ac76583a47c8777e604cb919485ec9716031d4b2c695df80a8ab11a639d49"
+      "bytes": 8190203,
+      "sha256": "5df19abcfe44b84a9899befe6cc3280524c79c51000ac0bb3789f325d3b4825f"
     }
   ]
 }

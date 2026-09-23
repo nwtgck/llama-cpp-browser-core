@@ -145,8 +145,10 @@ metadata, not encodable media data. OpenAI message helpers accept text/media mar
 not image URLs or audio payloads; upstream serialization may concatenate media parts.
 
 Subprocess video APIs are excluded (`MTMD_VIDEO=OFF`); applications can supply RGB frames.
-Profiles remain single-threaded. Some upstream audio paths spawn threads, including
-fixed four-thread Parakeet preprocessing, so `n_threads=1` is not a general remedy.
+Profiles remain single-threaded. The build-tree [audio threading overlay](audio-single-thread.md)
+serializes shared mel and Parakeet preprocessing in non-pthread Emscripten builds.
+Qwen3-TTS speaker preprocessing otherwise requests four threads independently of
+`n_threads=1`. This fix requires rebuilt runtime artifacts; it is not a new API.
 Audio generation is experimental upstream. Exposed APIs do not certify model support.
 
 Actions checks all five profiles in browser and test variants, standard type generation, package/schema consistency and size limits,
