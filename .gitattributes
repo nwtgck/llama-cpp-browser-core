@@ -2,4 +2,4 @@
 *.wasm binary
 
 # Unified diffs contain space-prefixed empty context lines.
-patches/*.patch whitespace=-blank-at-eol
+upstream-patches-only-as-a-last-resort-with-explicit-user-approval/*.patch whitespace=-blank-at-eol

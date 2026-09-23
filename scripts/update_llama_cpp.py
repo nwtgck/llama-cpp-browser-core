@@ -13,8 +13,7 @@ import tempfile
 from urllib.parse import quote, urlencode
 
 from github_api import ApiError, GitHub, full_sha, git, git_auth_env, repository_name
-from prepare_mtmd import prepare
-from prepare_tts import prepare_tts
+from prepare_mtmd import PATCH_DIRECTORY, prepare
 
 ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM = 'ggml-org/llama.cpp'
@@ -118,9 +117,8 @@ def change_pins(root: Path, commit: str) -> None:
 def overlay_preflight(root: Path) -> dict:
     try:
         with tempfile.TemporaryDirectory(prefix='lcb-update-overlay-') as tmp:
-            tts = prepare_tts(root / 'vendor/llama.cpp', Path(tmp) / 'tts', root / 'patches/mtmd-tts-generation.patch', capture_output=True)
-            prepare(tts, Path(tmp) / 'vision', root / 'patches/mtmd-webgpu-bf16.patch', capture_output=True)
-            prepare(root / 'vendor/llama.cpp', Path(tmp) / 'audio', root / 'patches/mtmd-audio-single-thread.patch',
+            prepare(root / 'vendor/llama.cpp', Path(tmp) / 'vision', root / f'{PATCH_DIRECTORY}/mtmd-webgpu-bf16.patch', capture_output=True)
+            prepare(root / 'vendor/llama.cpp', Path(tmp) / 'audio', root / f'{PATCH_DIRECTORY}/mtmd-audio-single-thread.patch',
                     capture_output=True, filename='mtmd-audio.cpp')
         return {'status': 'passed', 'scope': 'patch application only; not compilation or inference'}
     except (OSError, ValueError, subprocess.CalledProcessError) as error:

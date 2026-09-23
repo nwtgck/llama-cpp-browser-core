@@ -159,10 +159,6 @@ class LocalGitProposal(unittest.TestCase):
         clip.parent.mkdir(parents=True)
         clip.write_text('before\noriginal\nafter\n')
         (clip.parent / 'mtmd-audio.cpp').write_text('before\noriginal\nafter\n')
-        for name in ('models/models.h', 'models/qwen3tts-gen.cpp', 'mtmd-helper-gen.cpp', 'mtmd-helper.h'):
-            path = self.upstream / 'tools/mtmd' / name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text('before\noriginal\nafter\n')
         self.git('add', '.', cwd=self.upstream)
         self.git('commit', '-qm', 'Upstream A', cwd=self.upstream)
         self.old = self.git('rev-parse', 'HEAD', cwd=self.upstream)
@@ -174,10 +170,9 @@ class LocalGitProposal(unittest.TestCase):
         self.git('checkout', '--detach', self.old, cwd=self.root / 'vendor/llama.cpp')
         (self.root / 'config').mkdir()
         (self.root / 'config/toolchain.json').write_text(json.dumps({'llamaCommit': self.old, 'otherPin': 'unchanged'}, indent=2) + '\n')
-        (self.root / 'patches').mkdir()
-        (self.root / 'patches/mtmd-webgpu-bf16.patch').write_text('--- a/clip.cpp\n+++ b/clip.cpp\n@@ -1,3 +1,3 @@\n before\n-original\n+patched\n after\n')
-        (self.root / 'patches/mtmd-audio-single-thread.patch').write_text((self.root / 'patches/mtmd-webgpu-bf16.patch').read_text().replace('clip.cpp', 'mtmd-audio.cpp'))
-        (self.root / 'patches/mtmd-tts-generation.patch').write_text((self.root / 'patches/mtmd-webgpu-bf16.patch').read_text().replace('clip.cpp', 'tools/mtmd/mtmd-helper-gen.cpp'))
+        (self.root / 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval').mkdir()
+        (self.root / 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-webgpu-bf16.patch').write_text('--- a/clip.cpp\n+++ b/clip.cpp\n@@ -1,3 +1,3 @@\n before\n-original\n+patched\n after\n')
+        (self.root / 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-audio-single-thread.patch').write_text((self.root / 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-webgpu-bf16.patch').read_text().replace('clip.cpp', 'mtmd-audio.cpp'))
         self.git('add', '.', cwd=self.root)
         self.git('commit', '-qm', 'Core base', cwd=self.root)
         self.base = self.git('rev-parse', 'HEAD', cwd=self.root)
@@ -211,6 +206,19 @@ class LocalGitProposal(unittest.TestCase):
         self.assertEqual(result['status'], 'failed')
         self.assertIn('mtmd-audio.cpp', result['error'])
         self.assertEqual(audio.read_text(), 'upstream audio changed\n')
+
+    def test_unrelated_tts_changes_do_not_expand_preflight_dependencies(self):
+        # These internal files were dependencies of the removed optional overlay.
+        # They must not gate a compatibility preflight for vision/reference audio.
+        vendor = self.root / 'vendor/llama.cpp'
+        for name in ('mtmd-helper-gen.cpp', 'mtmd-helper.h', 'models/models.h', 'models/qwen3tts-gen.cpp'):
+            path = vendor / 'tools/mtmd' / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('Unrelated upstream generation refactor\n')
+        result = update.overlay_preflight(self.root)
+        self.assertEqual(result['status'], 'passed')
+        self.assertEqual((vendor / 'tools/mtmd/mtmd-helper-gen.cpp').read_text(),
+                         'Unrelated upstream generation refactor\n')
 
     def test_real_git_changes_exactly_two_pins_and_stops_after_push(self):
         result = self.propose()
@@ -255,7 +263,7 @@ class LocalGitProposal(unittest.TestCase):
         self.assertEqual(self.propose(allow_non_fast_forward=True)['status'], 'branch-created')
 
     def test_conflicting_overlay_preserves_candidate_without_creating_a_pr(self):
-        (self.root / 'patches/mtmd-webgpu-bf16.patch').write_text('not a patch\n')
+        (self.root / 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-webgpu-bf16.patch').write_text('not a patch\n')
         self.git('add', '.', cwd=self.root)
         self.git('commit', '-qm', 'Broken patch fixture', cwd=self.root)
         result = self.propose()

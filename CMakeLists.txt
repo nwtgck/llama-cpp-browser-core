@@ -44,12 +44,10 @@ if(NOT EMSCRIPTEN AND NOT LCB_NATIVE_CHECK)
 endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_program(LCB_CLANG NAMES clang REQUIRED)
-include(cmake/MtmdTtsOverlay.cmake)
 set(LCB_GENERATED "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${LCB_GENERATED}")
 execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_bindings.py"
     --source "${LCB_LLAMA_SOURCE}" --output "${LCB_GENERATED}" --clang "${LCB_CLANG}"
-    --mtmd-include "${LCB_TTS_INCLUDE}"
     COMMAND_ERROR_IS_FATAL ANY)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_bindings.py"
@@ -96,7 +94,6 @@ set(GGML_WEBGPU ${LCB_WEBGPU} CACHE BOOL "" FORCE)
 set(GGML_WEBGPU_JSPI ${LCB_JSPI} CACHE BOOL "" FORCE)
 set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
 add_subdirectory("${LCB_LLAMA_SOURCE}" "llama")
-lcb_attach_tts_overlay()
 
 # All browser profiles are single-threaded, including CPU and WebGPU.
 # The overlay retains upstream behavior in native/pthread builds.
@@ -141,7 +138,6 @@ else()
         target_link_options(core PRIVATE -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=2097152)
     endif()
 endif()
-target_include_directories(core BEFORE PRIVATE "${LCB_TTS_INCLUDE}")
 target_include_directories(core PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${LCB_LLAMA_SOURCE}"
     "${LCB_LLAMA_SOURCE}/include" "${LCB_LLAMA_SOURCE}/ggml/include")
 target_link_libraries(core PRIVATE llama-common mtmd llama)

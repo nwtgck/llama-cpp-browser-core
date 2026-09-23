@@ -202,23 +202,16 @@ class OverlayProvenance(unittest.TestCase):
         (self.vendor / 'tools/mtmd').mkdir(parents=True)
         (self.vendor / 'tools/mtmd/clip.cpp').write_text('before\noriginal\nafter\n')
         (self.vendor / 'tools/mtmd/mtmd-audio.cpp').write_text('before\noriginal\nafter\n')
-        for name in ('models/models.h', 'models/qwen3tts-gen.cpp', 'mtmd-helper-gen.cpp', 'mtmd-helper.h'):
-            path = self.vendor / 'tools/mtmd' / name
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text('before\noriginal\nafter\n')
         toolchain = {'llamaCommit': B, 'emscriptenRelease': A,
                      'emscriptenAsyncifyBigIntPatch': {'sourceSha256': '1' * 64, 'patchedSha256': '2' * 64}}
-        for name in ['config', 'patches', 'scripts', 'cmake', 'bridge', 'docs']:
+        for name in ['config', 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval', 'scripts', 'cmake', 'bridge', 'docs']:
             (self.root / name).mkdir()
         (self.root / 'config/toolchain.json').write_text(json.dumps(toolchain))
-        (self.root / 'patches/mtmd-webgpu-bf16.patch').write_text('--- a/clip.cpp\n+++ b/clip.cpp\n@@ -1,3 +1,3 @@\n before\n-original\n+patched\n after\n')
-        (self.root / 'patches/mtmd-audio-single-thread.patch').write_text((self.root / 'patches/mtmd-webgpu-bf16.patch').read_text().replace('clip.cpp', 'mtmd-audio.cpp'))
-        (self.root / 'patches/mtmd-tts-generation.patch').write_text((self.root / 'patches/mtmd-webgpu-bf16.patch').read_text().replace('clip.cpp', 'tools/mtmd/mtmd-helper-gen.cpp'))
+        (self.root / 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-webgpu-bf16.patch').write_text('--- a/clip.cpp\n+++ b/clip.cpp\n@@ -1,3 +1,3 @@\n before\n-original\n+patched\n after\n')
+        (self.root / 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-audio-single-thread.patch').write_text((self.root / 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-webgpu-bf16.patch').read_text().replace('clip.cpp', 'mtmd-audio.cpp'))
         for path in ['scripts/prepare_mtmd.py', 'cmake/MtmdOverlay.cmake', 'bridge/mtmd-bf16.h',
                      'docs/webgpu-bf16-projector.md', 'scripts/patch_emscripten.py',
-                     'cmake/MtmdAudioOverlay.cmake', 'docs/audio-single-thread.md',
-                     'scripts/prepare_tts.py', 'cmake/MtmdTtsOverlay.cmake',
-                     'scripts/generate_bindings.py', 'docs/tts-generation.md']:
+                     'cmake/MtmdAudioOverlay.cmake', 'docs/audio-single-thread.md']:
             (self.root / path).write_text('Provenance fixture: ' + path + '\n')
         self.manifest = {'sourceCommit': A, 'llamaCommit': B, 'profiles': {}}
         for name, enabled in [('cpu-wasm32', False), ('webgpu-wasm64-jspi', True)]:
@@ -246,7 +239,7 @@ class OverlayProvenance(unittest.TestCase):
         self.assertEqual(audio['compiledCopy']['sha256'], hashlib.sha256(b'before\npatched\nafter\n').hexdigest())
         self.assertEqual(audio['application']['enabledProfileVariants'], [
             'cpu-wasm32/browser', 'cpu-wasm32/test', 'webgpu-wasm64-jspi/browser', 'webgpu-wasm64-jspi/test'])
-        self.assertNotIn('patches/mtmd-audio-single-thread.patch', result['otherPatchFiles'])
+        self.assertNotIn('upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-audio-single-thread.patch', result['otherPatchFiles'])
         self.assertEqual((self.vendor / 'tools/mtmd/mtmd-audio.cpp').read_text(), 'before\noriginal\nafter\n')
 
     def test_audio_overlay_conflict_is_not_hidden_by_a_successful_vision_overlay(self):
@@ -255,10 +248,30 @@ class OverlayProvenance(unittest.TestCase):
             provenance.collect(self.root, self.manifest)
 
     def test_unknown_patch_files_are_not_silently_omitted(self):
-        (self.root / 'patches/another.patch').write_text('Another fixture patch\n')
+        (self.root / 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval/another.patch').write_text('Another fixture patch\n')
         report = provenance.collect(self.root, self.manifest)
-        self.assertIn('patches/another.patch', report['otherPatchFiles'])
-        self.assertEqual(report['otherPatchFiles']['patches/another.patch']['application'], 'not classified by this report')
+        self.assertIn('upstream-patches-only-as-a-last-resort-with-explicit-user-approval/another.patch', report['otherPatchFiles'])
+        self.assertEqual(report['otherPatchFiles']['upstream-patches-only-as-a-last-resort-with-explicit-user-approval/another.patch']['application'], 'not classified by this report')
+
+    def test_retained_overlays_are_independent_and_use_only_the_renamed_directory(self):
+        report = provenance.collect(self.root, self.manifest)
+        self.assertEqual({item['id'] for item in report['sourceOverlays']}, {
+            'webgpu-vision-bf16-projector', 'single-thread-wasm-audio-preprocessing'})
+        self.assertIn(provenance.PATCH_DIRECTORY, report['inventoryScope'])
+        for item in report['sourceOverlays']:
+            self.assertTrue(item['patch']['path'].startswith(provenance.PATCH_DIRECTORY + '/'))
+            self.assertNotIn('inputOverlay', item['application'])
+        self.assertFalse((self.root / 'patches').exists())
+
+    def test_nested_patch_is_inventoried_with_its_exact_identity(self):
+        relative = provenance.PATCH_DIRECTORY + '/nested/example.patch'
+        extra = self.root / relative
+        extra.parent.mkdir()
+        extra.write_bytes(b'Not an applied exception; inventory fixture only.\n')
+        item = provenance.collect(self.root, self.manifest)['otherPatchFiles'][relative]
+        self.assertEqual(item['sha256'], hashlib.sha256(extra.read_bytes()).hexdigest())
+        self.assertEqual(item['bytes'], extra.stat().st_size)
+        self.assertEqual(item['application'], 'not classified by this report')
 
     def test_unknown_build_activation_fails(self):
         self.manifest['profiles']['cpu-wasm32']['variants']['browser']['cmakeCommand'] = ['cmake']

@@ -33,7 +33,7 @@ class AudioOverlayTests(unittest.TestCase):
     def test_real_audio_overlay_is_idempotent_and_preserves_input(self):
         source = self.real_source()
         before = source.read_bytes()
-        patch = ROOT / 'patches/mtmd-audio-single-thread.patch'
+        patch = ROOT / 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-audio-single-thread.patch'
         target = prepare(self.upstream, self.work / 'build', patch, filename='mtmd-audio.cpp')
         stamp = target.stat().st_mtime_ns
         prepare(self.upstream, self.work / 'build', patch, filename='mtmd-audio.cpp')
@@ -46,7 +46,7 @@ class AudioOverlayTests(unittest.TestCase):
         compiler = os.environ.get('LCB_TEST_CXX') or shutil.which('clang++') or shutil.which('g++')
         if not compiler:
             self.skipTest('A native C++ compiler is required')
-        target = prepare(self.upstream, self.work / 'overlay', ROOT / 'patches/mtmd-audio-single-thread.patch', filename='mtmd-audio.cpp')
+        target = prepare(self.upstream, self.work / 'overlay', ROOT / 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-audio-single-thread.patch', filename='mtmd-audio.cpp')
         stubs = self.work / 'no-threads'
         stubs.mkdir()
         # The serial branch must not even attempt to construct a worker. Keep

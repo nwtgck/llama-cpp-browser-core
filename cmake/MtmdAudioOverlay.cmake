@@ -5,14 +5,14 @@ execute_process(COMMAND "${Python3_EXECUTABLE}" "${LCB_AUDIO_ROOT}/scripts/prepa
     --source "${LCB_LLAMA_SOURCE}" --output "${LCB_AUDIO_OVERLAY}" --component audio
     COMMAND_ERROR_IS_FATAL ANY)
 get_target_property(LCB_AUDIO_SOURCES mtmd SOURCES)
-if(NOT "${LCB_TTS_INCLUDE}/mtmd-audio.cpp" IN_LIST LCB_AUDIO_SOURCES)
+if(NOT "mtmd-audio.cpp" IN_LIST LCB_AUDIO_SOURCES)
     message(FATAL_ERROR "Upstream mtmd source layout changed; review the audio threading overlay")
 endif()
-list(REMOVE_ITEM LCB_AUDIO_SOURCES "${LCB_TTS_INCLUDE}/mtmd-audio.cpp")
+list(REMOVE_ITEM LCB_AUDIO_SOURCES "mtmd-audio.cpp")
 list(APPEND LCB_AUDIO_SOURCES "${LCB_AUDIO_OVERLAY}/mtmd-audio.cpp")
 set_property(TARGET mtmd PROPERTY SOURCES "${LCB_AUDIO_SOURCES}")
 target_include_directories(mtmd PRIVATE "${LCB_LLAMA_SOURCE}/tools/mtmd")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${LCB_LLAMA_SOURCE}/tools/mtmd/mtmd-audio.cpp"
-    "${LCB_AUDIO_ROOT}/patches/mtmd-audio-single-thread.patch"
+    "${LCB_AUDIO_ROOT}/upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-audio-single-thread.patch"
     "${LCB_AUDIO_ROOT}/scripts/prepare_mtmd.py")

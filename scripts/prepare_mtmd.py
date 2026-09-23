@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+PATCH_DIRECTORY = 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval'
 
 
 def prepare(source: Path, output: Path, patch: Path, *, capture_output: bool = False,
@@ -50,10 +51,10 @@ def main() -> None:
     parser.add_argument("--component", choices=("vision", "audio"), default="vision")
     args = parser.parse_args()
     if args.component == "audio":
-        prepare(args.source, args.output, ROOT / "patches/mtmd-audio-single-thread.patch",
+        prepare(args.source, args.output, ROOT / PATCH_DIRECTORY / "mtmd-audio-single-thread.patch",
                 filename="mtmd-audio.cpp")
     else:
-        prepare(args.source, args.output, ROOT / "patches/mtmd-webgpu-bf16.patch")
+        prepare(args.source, args.output, ROOT / PATCH_DIRECTORY / "mtmd-webgpu-bf16.patch")
 
 
 if __name__ == "__main__":

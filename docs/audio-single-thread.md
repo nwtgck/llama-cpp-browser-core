@@ -8,7 +8,7 @@ from `mtmd_context_params.n_threads`. Parakeet also has an independent fixed
 four-worker dispatch. Every current lcore browser profile has `pthreads: false`.
 Setting the context thread count to one does not fix those internal calls.
 
-`patches/mtmd-audio-single-thread.patch` runs the shared mel worker and Parakeet's
+`upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-audio-single-thread.patch` runs the shared mel worker and Parakeet's
 separate worker once with index 0 and stride 1, but only when `__EMSCRIPTEN__` is
 defined and `__EMSCRIPTEN_PTHREADS__` is not. All frames are computed; this is not
 merely dropping the extra workers while retaining a stride of four. Native and

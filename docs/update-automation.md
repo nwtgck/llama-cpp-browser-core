@@ -215,7 +215,7 @@ The report combines:
   claim that those locations remain current.
 - The upstream overlay's pristine source digest, patch digest, reconstructed
   patched-source digest, helper/hook/doc identities, and activation recorded in
-  each compiled profile/variant. Every other `patches/**/*.patch` is inventoried
+  each compiled profile/variant. Every other `upstream-patches-only-as-a-last-resort-with-explicit-user-approval/**/*.patch` is inventoried
   as unclassified rather than silently omitted. Toolchain patching is separately
   identified as not being a llama.cpp source patch.
 - Actual validation scope from the manifest. Synthetic CPU model checks and
