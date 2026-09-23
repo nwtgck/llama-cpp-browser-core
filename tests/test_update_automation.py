@@ -159,6 +159,10 @@ class LocalGitProposal(unittest.TestCase):
         clip.parent.mkdir(parents=True)
         clip.write_text('before\noriginal\nafter\n')
         (clip.parent / 'mtmd-audio.cpp').write_text('before\noriginal\nafter\n')
+        for name in ('models/models.h', 'models/qwen3tts-gen.cpp', 'mtmd-helper-gen.cpp', 'mtmd-helper.h'):
+            path = self.upstream / 'tools/mtmd' / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('before\noriginal\nafter\n')
         self.git('add', '.', cwd=self.upstream)
         self.git('commit', '-qm', 'Upstream A', cwd=self.upstream)
         self.old = self.git('rev-parse', 'HEAD', cwd=self.upstream)
@@ -173,6 +177,7 @@ class LocalGitProposal(unittest.TestCase):
         (self.root / 'patches').mkdir()
         (self.root / 'patches/mtmd-webgpu-bf16.patch').write_text('--- a/clip.cpp\n+++ b/clip.cpp\n@@ -1,3 +1,3 @@\n before\n-original\n+patched\n after\n')
         (self.root / 'patches/mtmd-audio-single-thread.patch').write_text((self.root / 'patches/mtmd-webgpu-bf16.patch').read_text().replace('clip.cpp', 'mtmd-audio.cpp'))
+        (self.root / 'patches/mtmd-tts-generation.patch').write_text((self.root / 'patches/mtmd-webgpu-bf16.patch').read_text().replace('clip.cpp', 'tools/mtmd/mtmd-helper-gen.cpp'))
         self.git('add', '.', cwd=self.root)
         self.git('commit', '-qm', 'Core base', cwd=self.root)
         self.base = self.git('rev-parse', 'HEAD', cwd=self.root)

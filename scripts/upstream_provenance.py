@@ -9,6 +9,7 @@ import tempfile
 
 from github_api import full_sha, git
 from prepare_mtmd import prepare
+from prepare_tts import prepare_tts, FILES as TTS_FILES
 
 
 def file_identity(path: Path) -> dict:
@@ -31,6 +32,7 @@ def collect(root: Path, manifest: dict) -> dict:
     upstream_path = 'tools/mtmd/clip.cpp'
     audio_patch = 'patches/mtmd-audio-single-thread.patch'
     audio_source = 'tools/mtmd/mtmd-audio.cpp'
+    tts_patch = 'patches/mtmd-tts-generation.patch'
     patch_files = sorted(path.relative_to(root).as_posix() for path in (root / 'patches').rglob('*.patch'))
     enabled = []
     audio_enabled = []
@@ -47,7 +49,9 @@ def collect(root: Path, manifest: dict) -> dict:
             if options[0].endswith('=ON'):
                 enabled.append(profile + '/' + variant)
     with tempfile.TemporaryDirectory(prefix='lcb-report-overlay-') as temporary:
-        patched = prepare(vendor, Path(temporary) / 'overlay', root / patch_path)
+        tts = prepare_tts(vendor, Path(temporary) / 'tts', root / tts_patch)
+        tts_copies = {name: file_identity(tts / name) for name in TTS_FILES}
+        patched = prepare(tts, Path(temporary) / 'overlay', root / patch_path)
         patched_identity = file_identity(patched)
         audio = prepare(vendor, Path(temporary) / 'audio', root / audio_patch, filename='mtmd-audio.cpp')
         audio_identity = file_identity(audio)
@@ -68,6 +72,7 @@ def collect(root: Path, manifest: dict) -> dict:
                 'preparationScript': 'scripts/prepare_mtmd.py',
                 'cmakeHook': 'cmake/MtmdOverlay.cmake',
                 'option': 'LCB_WEBGPU_BF16_PROJECTOR',
+                'inputOverlay': 'tts-generation',
                 'enabledProfileVariants': sorted(enabled),
             },
             'supportingFiles': {path: file_identity(root / path) for path in supporting},
@@ -90,9 +95,26 @@ def collect(root: Path, manifest: dict) -> dict:
                                  'docs/audio-single-thread.md']},
             'searchHints': ['mtmd-audio-single-thread', '__EMSCRIPTEN_PTHREADS__', 'log_mel_spectrogram'],
             'behavior': 'Execute shared mel and Parakeet preprocessing serially in non-pthread Emscripten builds. Native and pthread worker loops are unchanged.',
+        }, {
+            'id': 'tts-generation',
+            'kind': 'build-tree-source-overlay',
+            'upstreamSources': {name: file_identity(vendor / name) for name in TTS_FILES},
+            'patch': {'path': tts_patch, **file_identity(root / tts_patch)},
+            'copiesAfterThisOverlay': tts_copies,
+            'subsequentOverlays': {'tools/mtmd/clip.cpp': 'webgpu-vision-bf16-projector when enabled; see its compiledCopy for the final bytes'},
+            'application': {
+                'preparationScript': 'scripts/prepare_tts.py',
+                'cmakeHook': 'cmake/MtmdTtsOverlay.cmake',
+                'enabledProfileVariants': sorted(audio_enabled),
+            },
+            'supportingFiles': {path: file_identity(root / path) for path in
+                                ['scripts/prepare_tts.py', 'cmake/MtmdTtsOverlay.cmake',
+                                 'scripts/generate_bindings.py', 'docs/tts-generation.md']},
+            'searchHints': ['mtmd-tts-generation', 'supports_language_auto', 'n_frames'],
+            'behavior': 'Decode the actual Qwen waveform frame count without changing its attention window; expose generic automatic-language capability. Other mtmd source/header files are mirrored unchanged to keep quoted includes and precompiled headers coherent.',
         }],
         'otherPatchFiles': {path: {'application': 'not classified by this report', **file_identity(root / path)}
-                            for path in patch_files if path not in (patch_path, audio_patch)},
+                            for path in patch_files if path not in (patch_path, audio_patch, tts_patch)},
         'toolchainDivergences': {
             'emscriptenAsyncifyBigInt': {
                 'scope': 'Emscripten runtime, not upstream llama.cpp',

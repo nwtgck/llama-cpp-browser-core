@@ -21,14 +21,14 @@ def walk(node):
     for child in node.get('inner', []):
         yield from walk(child)
 
-def generate(source: Path, output: Path, compiler: str) -> dict:
+def generate(source: Path, output: Path, compiler: str, mtmd_include: Path | None = None) -> dict:
     output.mkdir(parents=True, exist_ok=True)
     unit = output / 'headers.c'
     unit.write_text('#include "llama.h"\n#include "gguf.h"\n#include "ggml-backend.h"\n'
                     '#include "mtmd.h"\n#include "mtmd-helper.h"\n')
     command = [compiler, '-x', 'c', '-std=c11', '-fsyntax-only',
                '-I'+str(source/'include'), '-I'+str(source/'ggml/include'),
-               '-I'+str(source/'tools/mtmd'),
+               '-I'+str(mtmd_include or source/'tools/mtmd'), '-I'+str(source/'tools/mtmd'),
                '-Xclang', '-ast-dump=json', str(unit)]
     ast = json.loads(subprocess.check_output(command, text=True))
     nodes = list(walk(ast))
@@ -136,7 +136,8 @@ def generate(source: Path, output: Path, compiler: str) -> dict:
             args.append(wire_type(kind,typ)+' '+arg)
             if kind == 'record':
                 guards.append(f'if (!{arg}) throw std::invalid_argument("null record argument");')
-                callargs.append(f'*((const {typ} *)lcb_checked_pointer({arg}))')
+                qualified = typ if typ.startswith('const ') else 'const ' + typ
+                callargs.append(f'*(({qualified} *)lcb_checked_pointer({arg}))')
             elif kind == 'pointer': callargs.append(f'({typ})lcb_checked_pointer({arg})')
             elif kind == 'u64' and typ in ('size_t', 'uintptr_t'):
                 callargs.append(f'({typ})lcb_checked_pointer({arg})')
@@ -197,7 +198,8 @@ def main():
     p.add_argument('--source',type=Path,required=True)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--clang',default='clang')
-    a=p.parse_args(); s=generate(a.source.resolve(),a.output.resolve(),a.clang)
+    p.add_argument('--mtmd-include', type=Path)
+    a=p.parse_args(); s=generate(a.source.resolve(),a.output.resolve(),a.clang,a.mtmd_include)
     print(json.dumps({'functions':len(s['functions']),'records':len(s['records']),
                       'constants':len(s['constants']),'excluded':len(s['excluded'])}))
 if __name__=='__main__': main()

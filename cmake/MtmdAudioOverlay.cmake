@@ -5,10 +5,10 @@ execute_process(COMMAND "${Python3_EXECUTABLE}" "${LCB_AUDIO_ROOT}/scripts/prepa
     --source "${LCB_LLAMA_SOURCE}" --output "${LCB_AUDIO_OVERLAY}" --component audio
     COMMAND_ERROR_IS_FATAL ANY)
 get_target_property(LCB_AUDIO_SOURCES mtmd SOURCES)
-if(NOT "mtmd-audio.cpp" IN_LIST LCB_AUDIO_SOURCES)
+if(NOT "${LCB_TTS_INCLUDE}/mtmd-audio.cpp" IN_LIST LCB_AUDIO_SOURCES)
     message(FATAL_ERROR "Upstream mtmd source layout changed; review the audio threading overlay")
 endif()
-list(REMOVE_ITEM LCB_AUDIO_SOURCES "mtmd-audio.cpp")
+list(REMOVE_ITEM LCB_AUDIO_SOURCES "${LCB_TTS_INCLUDE}/mtmd-audio.cpp")
 list(APPEND LCB_AUDIO_SOURCES "${LCB_AUDIO_OVERLAY}/mtmd-audio.cpp")
 set_property(TARGET mtmd PROPERTY SOURCES "${LCB_AUDIO_SOURCES}")
 target_include_directories(mtmd PRIVATE "${LCB_LLAMA_SOURCE}/tools/mtmd")

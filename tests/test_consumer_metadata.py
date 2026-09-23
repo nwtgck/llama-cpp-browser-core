@@ -202,6 +202,10 @@ class OverlayProvenance(unittest.TestCase):
         (self.vendor / 'tools/mtmd').mkdir(parents=True)
         (self.vendor / 'tools/mtmd/clip.cpp').write_text('before\noriginal\nafter\n')
         (self.vendor / 'tools/mtmd/mtmd-audio.cpp').write_text('before\noriginal\nafter\n')
+        for name in ('models/models.h', 'models/qwen3tts-gen.cpp', 'mtmd-helper-gen.cpp', 'mtmd-helper.h'):
+            path = self.vendor / 'tools/mtmd' / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('before\noriginal\nafter\n')
         toolchain = {'llamaCommit': B, 'emscriptenRelease': A,
                      'emscriptenAsyncifyBigIntPatch': {'sourceSha256': '1' * 64, 'patchedSha256': '2' * 64}}
         for name in ['config', 'patches', 'scripts', 'cmake', 'bridge', 'docs']:
@@ -209,9 +213,12 @@ class OverlayProvenance(unittest.TestCase):
         (self.root / 'config/toolchain.json').write_text(json.dumps(toolchain))
         (self.root / 'patches/mtmd-webgpu-bf16.patch').write_text('--- a/clip.cpp\n+++ b/clip.cpp\n@@ -1,3 +1,3 @@\n before\n-original\n+patched\n after\n')
         (self.root / 'patches/mtmd-audio-single-thread.patch').write_text((self.root / 'patches/mtmd-webgpu-bf16.patch').read_text().replace('clip.cpp', 'mtmd-audio.cpp'))
+        (self.root / 'patches/mtmd-tts-generation.patch').write_text((self.root / 'patches/mtmd-webgpu-bf16.patch').read_text().replace('clip.cpp', 'tools/mtmd/mtmd-helper-gen.cpp'))
         for path in ['scripts/prepare_mtmd.py', 'cmake/MtmdOverlay.cmake', 'bridge/mtmd-bf16.h',
                      'docs/webgpu-bf16-projector.md', 'scripts/patch_emscripten.py',
-                     'cmake/MtmdAudioOverlay.cmake', 'docs/audio-single-thread.md']:
+                     'cmake/MtmdAudioOverlay.cmake', 'docs/audio-single-thread.md',
+                     'scripts/prepare_tts.py', 'cmake/MtmdTtsOverlay.cmake',
+                     'scripts/generate_bindings.py', 'docs/tts-generation.md']:
             (self.root / path).write_text('Provenance fixture: ' + path + '\n')
         self.manifest = {'sourceCommit': A, 'llamaCommit': B, 'profiles': {}}
         for name, enabled in [('cpu-wasm32', False), ('webgpu-wasm64-jspi', True)]:
