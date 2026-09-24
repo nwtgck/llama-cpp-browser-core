@@ -2,7 +2,7 @@
 
 ## Why this overlay exists
 
-The pinned llama.cpp (`b29c606e28a01b1bc8c1351026a0fa6e616bf6c4`) requests
+The pinned llama.cpp (`7fe450e19305b828c199d602c23a8337aaa1f03b`) requests
 four threads inside Qwen3-TTS speaker-reference mel preprocessing. This is separate
 from `mtmd_context_params.n_threads`. Parakeet also has an independent fixed
 four-worker dispatch. Every current lcore browser profile has `pthreads: false`.
@@ -44,5 +44,5 @@ Tests also cover idempotent preparation, unchanged input, overlay conflicts,
 provenance, and the automatic updater's audio preflight.
 
 Primary sources:
-- https://github.com/ggml-org/llama.cpp/blob/b29c606e28a01b1bc8c1351026a0fa6e616bf6c4/tools/mtmd/mtmd-audio.cpp
+- https://github.com/ggml-org/llama.cpp/blob/7fe450e19305b828c199d602c23a8337aaa1f03b/tools/mtmd/mtmd-audio.cpp
 - https://github.com/nwtgck/llama-cpp-browser-core/blob/develop/config/profiles.json

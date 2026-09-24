@@ -18,9 +18,10 @@ The vendor submodule is never edited. `scripts/prepare_mtmd.py` copies `clip.cpp
 into each build tree and applies `upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-webgpu-bf16.patch` there. CMake
 replaces that one mtmd translation unit. The helper is `bridge/mtmd-bf16.h`.
 Configure fails if the patch or upstream target source layout does not match.
-The small allocation-error guard included in the patch is already present in
-upstream reference commit `ec91ab5add06555970f98d9c5361d884f3f530f8`; the other
-changes are local to this workaround.
+At the v0.5.0 pin `7fe450e19305b828c199d602c23a8337aaa1f03b`, upstream already
+checks graph-allocation failure. That guard is now unchanged patch context, not
+a downstream backport. Placement diagnostics are inserted only after successful
+allocation. The loader conversion and its existing checks remain local.
 
 ## Why this lives in the loader
 
@@ -35,6 +36,14 @@ the whole mtmd target. A failed configure must stop the build rather than
 silently omit the workaround or reuse an older patched translation unit.
 
 ## Upstream update / removal criteria
+
+The v0.4.1-era patch also replaced an unchecked graph-allocation call with an
+error check. Reapplying that backport to v0.5.0 fails because its old input no
+longer exists. The v0.5.0 refresh removes only that redundant replacement and
+its obsolete comments, retaining the upstream check and the existing placement
+summary. It does not disable the BF16 workaround or broaden its scope. The
+preparer still rejects mismatches; it does not try the reverse patch, ignore
+failed hunks, or use a previously generated copy after a failure.
 
 A patch that still applies is not proof that this workaround is still needed.
 When changing the pinned llama.cpp commit, check BF16 input acceptance and the
@@ -93,15 +102,25 @@ node's completion forces extra synchronization, independent of these summaries.
 ## Local checks
 
 ```sh
+python3 -m unittest discover -s tests -p test_mtmd_allocation_guard.py -v
 python3 -m unittest discover -s tests -p test_mtmd_overlay.py -v
 cmake -S tests/mtmd-bf16 -B build/mtmd-bf16-tests -DLCB_LLAMA_SOURCE="$PWD/vendor/llama.cpp"
 cmake --build build/mtmd-bf16-tests --target mtmd-bf16-test --parallel 2
 build/mtmd-bf16-tests/mtmd-bf16-test
 ```
 
+The allocation-boundary regression uses a short, independently recorded v0.5.0
+source fragment with the production preparer and the real diagnostic hunk. It
+checks guard ownership/order, unchanged input, unrelated line movement, parallel
+profile/variant outputs, idempotence, and rejection of changed or already-patched
+input without publishing a replacement. It does not test the omitted loader
+hunks or replace the full-source checks.
+
 `LCB_TEST_LLAMA_SOURCE` can point the overlay test at a separately checked-out
-copy of the pinned source. That test checks application, source immutability and
-C++ syntax when clang++ is installed. The native conversion test links the real
+copy of the pinned source. That test applies all hunks and checks that the
+upstream guard occurs once before placement diagnostics, that the input stays
+unchanged, and that repeated preparation preserves the output timestamp. It
+also checks C++ syntax when clang++ is installed. The native conversion test links the real
 GGML conversion routine and checks bit patterns, chunk boundaries, offsets,
 truncation, overflow and upload errors. It does not emulate GPU performance.
 `tests/mtmd-overlay/CMakeLists.txt` can additionally configure the real native
