@@ -12,6 +12,17 @@ spec = importlib.util.spec_from_file_location('multi_runtime_package', ROOT / 's
 package = importlib.util.module_from_spec(spec); spec.loader.exec_module(package)
 SOURCE = 'a' * 40
 
+def schema_fixture():
+    return {'abiVersion': 2, 'functions': [], 'records': [], 'constants': []}
+
+def schema_hash():
+    return hashlib.sha256(json.dumps(schema_fixture()).encode()).hexdigest()
+
+def schema_file(name):
+    if name == 'schema.json': return json.dumps(schema_fixture())
+    if name == 'schema.mjs': return 'export default ' + json.dumps({**schema_fixture(), 'schemaSha256': schema_hash()}, separators=(',', ':')) + ';\n'
+    return 'fixture declarations'
+
 def write_manifest(root, data):
     data['files'] = [{'path': p.relative_to(root).as_posix(), 'bytes': p.stat().st_size,
                       'sha256': hashlib.sha256(p.read_bytes()).hexdigest()}
@@ -40,8 +51,10 @@ class MultiRuntime(unittest.TestCase):
             for name in validator.EXAMPLE_RUNTIME_FILES: put('examples/runtime/' + name, 'fixture')
             profiles = {'cpu-wasm32': {}}
         else:
-            manifest.update(formatVersion=1, abiVersion=1, runtime=runtime, upstreams={'fixture': 'b' * 40}, experimental=True)
+            manifest.update(formatVersion=2, abiVersion=2, schemaSha256=schema_hash(), capabilities=validator.CAPABILITIES, runtime=runtime, upstreams={'fixture': 'b' * 40}, experimental=True)
             for name in ['stable-diffusion/LICENSE', 'ggml/LICENSE', 'toolchain/emscripten/LICENSE', 'toolchain/emdawnwebgpu_pkg/LICENSE', *['embedded/' + p + '.txt' for p in ['json.hpp', 'stb_image.h', 'stb_image_resize.h', 'stb_image_write.h']]]: put('licenses/' + name, 'fixture notice')
+            for name in validator.API_FILES: put('api/'+name, schema_file(name))
+            for name in validator.HELPERS: put('examples/runtime/'+name, 'fixture helper')
             profiles = validator.PROFILES
         for profile, config in profiles.items():
             variants = {}

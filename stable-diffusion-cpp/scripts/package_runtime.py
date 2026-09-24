@@ -13,6 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 VARIANTS = json.loads((ROOT / 'config/variants.json').read_text())
 PROFILES = json.loads((ROOT / 'config/profiles.json').read_text())
 NAME = 'stable-diffusion-cpp-browser-core'
+HELPERS = ('index.mjs', 'index.d.ts', 'bindings.mjs', 'read-only-file.mjs', 'README.md')
+API_FILES = ('schema.json', 'schema.mjs', 'functions.d.ts')
+CAPABILITIES = {'ggufFileOffsetBits': 64, 'callerOwnedRandomAccess': True, 'upstreamApi': True}
 
 def sha(path: Path) -> str:
     with path.open('rb') as stream: return hashlib.file_digest(stream, 'sha256').hexdigest()
@@ -22,7 +25,7 @@ def validate(directory: Path, require_clean: bool = True) -> dict:
     if package['name'] != NAME or any(k in package for k in ('scripts', 'dependencies', 'devDependencies', 'optionalDependencies', 'workspaces')):
         raise ValueError('Not a runtime-only image package')
     manifest = json.loads((directory / 'manifest.json').read_text())
-    if manifest['formatVersion'] != 1 or manifest['abiVersion'] != 1 or manifest['runtime'] != 'stable-diffusion-cpp':
+    if manifest['formatVersion'] != 2 or manifest['abiVersion'] != 2 or manifest['runtime'] != 'stable-diffusion-cpp':
         raise ValueError('Unknown image runtime format')
     files = manifest['files']
     expected = {entry['path'] for entry in files}
@@ -37,6 +40,17 @@ def validate(directory: Path, require_clean: bool = True) -> dict:
         if path.is_symlink() or not path.resolve().is_relative_to(directory.resolve()) or path.stat().st_size != entry['bytes'] or sha(path) != entry['sha256']:
             raise ValueError('Invalid image payload: ' + entry['path'])
         if path.stat().st_size >= 100 * 1024**2: raise ValueError('Artifact single-file size limit exceeded')
+    for name in API_FILES:
+        if 'api/' + name not in expected: raise ValueError('Missing image API schema')
+    for name in HELPERS:
+        if 'examples/runtime/' + name not in expected: raise ValueError('Missing thin host helper')
+    schema = json.loads((directory / 'api/schema.json').read_text())
+    digest = sha(directory / 'api/schema.json')
+    expected_module = 'export default ' + json.dumps({**schema, 'schemaSha256': digest}, separators=(',', ':')) + ';\n'
+    if (schema['abiVersion'] != 2 or manifest.get('schemaSha256') != digest or
+            (directory / 'api/schema.mjs').read_text() != expected_module or
+            manifest.get('capabilities') != CAPABILITIES):
+        raise ValueError('Image schema/capability fingerprint mismatch')
     if set(manifest['profiles']) != set(PROFILES): raise ValueError('Incomplete image profiles')
     for profile, info in manifest['profiles'].items():
         if set(info['variants']) != set(VARIANTS): raise ValueError('Incomplete image variants')
@@ -66,7 +80,7 @@ def validate(directory: Path, require_clean: bool = True) -> dict:
 def package(build_root: Path, destination: Path, license_roots: list[Path]) -> None:
     sys.path.insert(0, str(ROOT.parent / 'scripts'))
     from package_notices import collect_notices, collect_subtree_notices
-    profiles = {}; source = None; upstreams = None
+    profiles = {}; source = None; upstreams = None; schema_bytes = None
     with tempfile.TemporaryDirectory(prefix='sdb-package-') as temporary:
         out = Path(temporary)
         for profile in PROFILES:
@@ -79,6 +93,15 @@ def package(build_root: Path, destination: Path, license_roots: list[Path]) -> N
                 source = data['sourceCommit']; upstreams = data['upstreams']
                 profiles[profile]['variants'][variant] = data
                 shutil.copytree(build / 'runtime', out / 'profiles' / profile / variant)
+                current = (build / 'generated/schema.json').read_bytes()
+                if schema_bytes is not None and current != schema_bytes: raise ValueError('Mixed image binding schemas')
+                schema_bytes = current
+                if not (out / 'api').exists():
+                    (out / 'api').mkdir()
+                    for name in API_FILES: shutil.copy2(build / 'generated' / name, out / 'api' / name)
+        (out / 'examples/runtime').mkdir(parents=True)
+        for name in HELPERS: shutil.copy2(ROOT / 'examples/runtime' / name, out / 'examples/runtime' / name)
+
         shutil.copy2(ROOT / 'LICENSE', out / 'LICENSE')
         shutil.copy2(ROOT / 'README.md', out / 'README.md')
         sd = ROOT / 'vendor/stable-diffusion.cpp'
@@ -94,10 +117,11 @@ def package(build_root: Path, destination: Path, license_roots: list[Path]) -> N
             raise ValueError('Provide exactly the Emscripten and Dawn notice roots')
         for name, root in roots.items(): collect_notices(root, out / 'licenses/toolchain' / name)
         pkg = {'name': NAME, 'version': '0.1.0', 'private': True, 'type': 'module', 'license': 'MIT',
-               'files': ['profiles/', 'licenses/', 'manifest.json', 'README.md', 'LICENSE'],
-               'exports': {'./profiles/*': './profiles/*', './manifest.json': './manifest.json'}}
+               'files': ['api/', 'examples/', 'profiles/', 'licenses/', 'manifest.json', 'README.md', 'LICENSE'],
+               'exports': {'./examples/runtime': {'types': './examples/runtime/index.d.ts', 'import': './examples/runtime/index.mjs'}, './api/*': './api/*', './profiles/*': './profiles/*', './manifest.json': './manifest.json'}}
         (out / 'package.json').write_text(json.dumps(pkg, indent=2) + '\n')
-        manifest = {'formatVersion': 1, 'runtime': 'stable-diffusion-cpp', 'abiVersion': 1,
+        manifest = {'formatVersion': 2, 'runtime': 'stable-diffusion-cpp', 'abiVersion': 2,
+                    'schemaSha256': hashlib.sha256(schema_bytes).hexdigest(), 'capabilities': CAPABILITIES,
                     'sourceCommit': source, 'upstreams': upstreams, 'profiles': profiles,
                     'experimental': True, 'files': [{'path': p.relative_to(out).as_posix(), 'bytes': p.stat().st_size, 'sha256': sha(p)}
                     for p in sorted(out.rglob('*')) if p.is_file()]}

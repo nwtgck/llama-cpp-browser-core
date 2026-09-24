@@ -1,6 +1,7 @@
 """Real CMake configuration with mock upstream targets, not a Wasm build."""
 from pathlib import Path
 import shutil
+import json
 import subprocess
 import tempfile
 import unittest
@@ -10,11 +11,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @unittest.skipUnless(shutil.which('cmake') and shutil.which('c++'), 'CMake and C++ compiler required')
 class BrowserLinkContract(unittest.TestCase):
-    def configure(self, variant, jspi):
+    def configure(self, variant, jspi, memory64=False):
         temp = tempfile.TemporaryDirectory(); self.addCleanup(temp.cleanup)
         root = Path(temp.name)
         (root/'bridge').mkdir(); (root/'config').mkdir()
-        for path in ('config/variants.json','bridge/core.d.ts','bridge/callbacks.js'):
+        (root/'scripts').mkdir(); (root/'tests').mkdir()
+        for path in ('config/variants.json','bridge/core.d.ts','scripts/generate_bindings.py','tests/wasm-probes.cpp'):
             shutil.copy2(ROOT/path,root/path)
         (root/'bridge/browser.cpp').write_text('// Fixture, never compiled\n')
         (root/'CMakeLists.txt').write_text((ROOT/'CMakeLists.txt').read_text()+'''
@@ -29,7 +31,7 @@ file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/backend-options.txt"
 ''')
         sd, ggml = root/'upstream', root/'ggml'
         for path in (sd,ggml): (path/'include').mkdir(parents=True)
-        (sd/'include/stable-diffusion.h').touch();(ggml/'include/ggml.h').touch()
+        (sd/'include/stable-diffusion.h').write_text('void sd_ctx_params_init(void *p);');(ggml/'include/ggml.h').touch()
         (sd/'stub.cpp').write_text('// No compilation\n')
         (sd/'CMakeLists.txt').write_text('''
 add_library(stable-diffusion STATIC stub.cpp)
@@ -39,7 +41,9 @@ set_property(TARGET ggml-webgpu PROPERTY INTERFACE_LINK_OPTIONS "-exceptions")
         output = root/'out'
         command = ['cmake','-S',str(root),'-B',str(output),'-DEMSCRIPTEN=ON',
                    '-DSDCB_SOURCE='+str(sd),'-DSDCB_GGML_SOURCE='+str(ggml),
-                   '-DSDCB_VARIANT='+variant,'-DSDCB_JSPI='+('ON' if jspi else 'OFF')]
+                   '-DSDCB_VARIANT='+variant,'-DSDCB_JSPI='+('ON' if jspi else 'OFF'),
+                   '-DSDCB_MEMORY64='+('ON' if memory64 else 'OFF'),
+                   '-DSDCB_MAXIMUM_MEMORY='+('17179869184' if memory64 else '4294967296')]
         subprocess.run(command,check=True,capture_output=True,text=True,timeout=60)
         return root, {p.stem:p.read_text() for p in output.glob('*.txt')}
 
@@ -49,21 +53,37 @@ set_property(TARGET ggml-webgpu PROPERTY INTERFACE_LINK_OPTIONS "-exceptions")
                 root,data = self.configure('browser',jspi)
                 self.assertNotIn('_sdb_test_callbacks', data['link-options'])
                 self.assertNotIn('SDCB_TEST_HOOKS',data['defines'])
-                self.assertIn('--pre-js',data['link-options'])
-                self.assertIn(str(root/'bridge/callbacks.js'),data['link-inputs'])
+                self.assertNotIn('--pre-js',data['link-options'])
+                self.assertIn('exports.json',data['link-inputs'])
+                self.assertNotIn('_sdc_test_callbacks', json.loads((root/'out/generated/exports.json').read_text()))
                 self.assertIn('-sJSPI=1' if jspi else '-sASYNCIFY=1',data['link-options'])
                 incoming=next(part for part in data['link-options'].split(';') if part.startswith('-sINCOMING_MODULE_JS_API'))
                 self.assertNotIn('onProgress',incoming);self.assertNotIn('onLog',incoming)
                 if not jspi: self.assertNotIn('-exceptions',data['backend-options'])
 
+    def test_memory64_jspi_keeps_large_heap_and_address_width_flags(self):
+        for variant in ('browser', 'test'):
+            with self.subTest(variant=variant):
+                _, data = self.configure(variant, True, memory64=True)
+                self.assertIn('-sMEMORY64=1', data['link-options'])
+                self.assertIn('-sMAXIMUM_MEMORY=17179869184', data['link-options'])
+                self.assertIn('-sJSPI=1', data['link-options'])
+
+    def test_memory64_asyncify_is_rejected(self):
+        with self.assertRaises(subprocess.CalledProcessError) as failure:
+            self.configure('browser', False, memory64=True)
+        self.assertIn('memory64 profile requires JSPI', failure.exception.stderr)
+
     def test_test_variants_expose_only_the_explicit_synthetic_callback_hook(self):
         for jspi in (True,False):
             with self.subTest(jspi=jspi):
-                _,data = self.configure('test',jspi)
-                self.assertIn('SDCB_TEST_HOOKS=1',data['defines'])
+                root,data = self.configure('test',jspi)
+                self.assertIn('SD_BROWSER_WEBGPU=1',data['defines'])
                 exports=next(part for part in data['link-options'].split(';') if part.startswith('-sEXPORTED_FUNCTIONS'))
-                self.assertEqual(exports.count("'_sdb_test_callbacks'"),1)
-                self.assertIn("'_sdb_unload','_sdb_test_callbacks']",exports)
+                entries=json.loads((root/'out/generated/exports.json').read_text())
+                self.assertEqual(entries.count('_sdc_test_callbacks'),1)
+                self.assertIn('_sdc_test_gguf_offset',entries)
+                self.assertNotIn('_sdb_load',entries)
                 self.assertIn('-sASSERTIONS=1',data['link-options'])
 
 

@@ -76,10 +76,10 @@ class ParallelWorkflow(unittest.TestCase):
         incoming = re.search(r'"-sINCOMING_MODULE_JS_API=([^\n]+)', cmake)[1]
         self.assertNotIn('onLog', incoming); self.assertNotIn('onProgress', incoming)
         self.assertIn('if(SDCB_VARIANT STREQUAL "test")', cmake)
-        self.assertIn('SDCB_TEST_HOOKS=1', cmake)
-        self.assertIn('--pre-js', cmake)
+        self.assertIn('target_sources(core PRIVATE tests/wasm-probes.cpp)', cmake)
+        self.assertNotIn('--pre-js', cmake)
         smoke = (ROOT/'stable-diffusion-cpp/tests/browser-smoke.mjs').read_text()
-        for check in ('new Worker(', 'worker.terminate()', 'core.FS.mount(core.WORKERFS', 'core.setCallbacks({})', 'core._sdb_test_callbacks()', '120000'):
+        for check in ('new Worker(', 'worker.terminate()', 'mountReadOnlyFile', 'sd_set_log_callback(0n, 0n)', 'module._sdc_test_callbacks()', '120000'):
             self.assertIn(check, smoke)
         self.assertNotIn('realModelInference = true', smoke)
 

@@ -28,12 +28,34 @@
     {
       "file": "0003-webgpu-unknown-memory-capacity.patch",
       "target": "ggml",
-      "reason": "Do not misreport maxBufferSize as total/free GPU memory. Scoped to the image runtime; its bridge requires a positive budget.",
+      "reason": "Do not misreport maxBufferSize as total/free GPU memory. Image callers must supply an explicit budget when live capacity is unknown.",
       "files": [
         {
           "path": "ggml/src/ggml-webgpu/ggml-webgpu.cpp",
           "beforeSha256": "30c099a6af5168b4a5ebabbe22a27838b9fd373bd008e70a73493ff60903537e",
           "afterSha256": "661ac0197d0057d15c8ab39a63e5e79d98b6974c167f9f01deac978b7c29cd7a"
+        }
+      ]
+    },
+    {
+      "file": "0004-browser-gguf-64bit-file-offsets.patch",
+      "target": "stable-diffusion",
+      "reason": "Read unsplit GGUF metadata without whole-file size_t accumulation; preserve 64-bit file positions, validate metadata and leave tensor payloads lazy.",
+      "files": [
+        {
+          "path": "src/model_io/gguf_reader_ext.h",
+          "beforeSha256": "3b36d1ef883f196b5e6847ec817fd20a7146301ee6bd3a86920e86fa72715586",
+          "afterSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a"
+        },
+        {
+          "path": "src/model_io/gguf_io.cpp",
+          "beforeSha256": "976065ada0e5ab3b3d7d7581e1e853ea2f5653d0226a8e38d85ee80d35f09d55",
+          "afterSha256": "5735b65ddf5d79c2dee028f6987aaa7c346bcb565bc279274d29137fb9ee01a9"
+        },
+        {
+          "path": "src/model_io/tensor_storage.h",
+          "beforeSha256": "fb37fe9c75080e6ec9989fe178ff6c47c2e7238f85bb70d12bd7c8c472327d44",
+          "afterSha256": "f789aef10b7cbb320bc730132643bf9e31d47c8defcbe3382ed73f613a584690"
         }
       ]
     }

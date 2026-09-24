@@ -2,6 +2,7 @@
 import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { makeFixture } from './gguf-fixture.mjs';
 import { pathToFileURL } from 'node:url';
 const root = path.resolve(process.argv[2] ?? 'dist/package');
 const { chromium } = await import(pathToFileURL(path.resolve('../.tools/browser/node_modules/playwright/index.mjs')).href);
@@ -24,45 +25,67 @@ try {
   const profiles = JSON.parse(await readFile('config/profiles.json', 'utf8'));
   for (const profile of Object.keys(profiles)) {
     for (const variant of ['browser', 'test']) {
-      const result = await page.evaluate(async ({ profile, variant }) => {
-        const run = async ({ base, variant }) => {
+      const result = await page.evaluate(async ({ profile, variant, fixtureSource }) => {
+        const run = async ({ origin, base, variant, profile }) => {
+          const { attachCore, schema, mountReadOnlyFile } = await import(origin + '/examples/runtime/index.mjs');
           const create = (await import(base + 'core.mjs')).default;
           const response = await fetch(base + 'core.wasm');
           if (!response.ok) throw Error('Missing Wasm');
-          const wasmBinary = new Uint8Array(await response.arrayBuffer());
-          const logs = [], progress = [];
-          const core = await create({ wasmBinary,
+          const module = await create({ wasmBinary: new Uint8Array(await response.arrayBuffer()),
             locateFile(name) { if (name !== 'core.wasm') throw Error('Unexpected side file'); return base + name; },
-            onLog: (level, text) => logs.push([level, text]),
-            onProgress: (...args) => progress.push(args),
           });
-          if (core._sdb_abi_version() !== 1 || !core.FS || !core.WORKERFS) throw Error('Missing bridge/filesystem boundary');
-          // WORKERFS must actually read a browser Blob, not just exist as a name.
-          core.FS.mkdir('/models');
-          core.FS.mount(core.WORKERFS, { blobs: [{ name: 'probe.bin', data: new Blob([new Uint8Array([2, 3, 5, 7])]) }] }, '/models');
-          if (Array.from(core.FS.readFile('/models/probe.bin')).join(',') !== '2,3,5,7') throw Error('WORKERFS read mismatch');
-          core.FS.unmount('/models');
-          for (let attempt = 0; attempt < 2; attempt++) {
-            if (await core.ccall('sdb_load', 'number', ['string'], ['[]'], { async: true }) !== 0) throw Error('Invalid input was accepted');
-            if (!core.UTF8ToString(core._sdb_error())) throw Error('No diagnostic');
+          if (module._sdc_abi_version() !== 2 || module._sdb_load !== undefined) throw Error('Wrong public surface');
+          const core = attachCore(module, schema, { suspension: profile.endsWith('asyncify') ? 'asyncify' : 'direct' });
+          if (core.pointerBytes !== (profile.includes('wasm64') ? 8 : 4)) throw Error('Wrong address width');
+          const params = core.allocRecord('sd_img_gen_params_t');
+          await core.api.sd_img_gen_params_init(params);
+          core.setField('sd_img_gen_params_t', params, 'seed', 9007199254741009n);
+          core.setField('sd_img_gen_params_t', params, 'width', 1024);
+          if (core.getField('sd_img_gen_params_t', params, 'seed') !== 9007199254741009n || core.getField('sd_img_gen_params_t', params, 'width') !== 1024) throw Error('Caller parameter roundtrip failed');
+          core.free(params);
+          module.FS.mkdir('/models');
+          for (const gib of [0, 2, 4, 8]) {
+            const fixture = makeFixture(gib, gib === 2 ? 2 : 3);
+            const mounted = mountReadOnlyFile(core, '/models/probe.gguf', fixture.source, { maxChunkBytes: 4096 });
+            const file = module.FS.open(mounted.path, 'r');
+            module.FS.llseek(file, fixture.offset, 0);
+            const value = new Uint8Array(4);
+            if (module.FS.read(file, value, 0, 4) !== 4 || value.join(',') !== '0,0,128,63') throw Error('FS large-offset read failed');
+            module.FS.close(file);
+            if (variant === 'test') {
+              const path = core.utf8(mounted.path);
+              const pointer = core.pointerBytes === 8 ? path : Number(path);
+              try {
+                if (module._sdc_test_gguf_offset(pointer) !== BigInt(fixture.offset)) throw Error('Native GGUF offset was truncated');
+                if (module._sdc_test_gguf_value(pointer) !== 0x3f800000) throw Error('Native C++ large-offset read failed');
+              } finally { core.free(path); }
+            }
+            mounted.remove();
+            if (fixture.requests.length > 128 || fixture.requests.some(r => r.length > 4096)) throw Error('Unexpected whole-model/uncapped read');
           }
-          if (logs.length < 2 || !logs.every(([, text]) => text.includes('object'))) throw Error('Factory log callbacks did not arrive');
-          if (variant === 'test') {
-            core._sdb_test_callbacks();
-            if (JSON.stringify(progress) !== '[[1,4,0.125]]' || logs.at(-1)[1] !== 'browser callback probe') throw Error('Wasm callback path failed');
-            core.setCallbacks({ onProgress() { throw Error('Listener failure'); }, onLog() { throw Error('Listener failure'); } });
-            core._sdb_test_callbacks(); // Listener errors must not cross into Wasm.
-          } else if (core._sdb_test_callbacks !== undefined) {
-            throw Error('Test-only hook leaked into production');
+          const logs = [], progress = [];
+          const log = module.addFunction((level, text, data) => logs.push([level, core.readUtf8(BigInt(text)), Number(data)]), 'vipp');
+          const update = module.addFunction((step, steps, time, data) => progress.push([step, steps, time, Number(data)]), 'viifp');
+          try {
+            await core.api.sd_set_log_callback(BigInt(log), 17n);
+            await core.api.sd_set_progress_callback(BigInt(update), 19n);
+            if (variant === 'test') {
+              module._sdc_test_callbacks();
+              if (!logs.at(-1)[1].includes('native callback probe') || logs.at(-1)[2] !== 17 || JSON.stringify(progress) !== '[[1,4,0.125,19]]') throw Error('Native callback ABI mismatch');
+            } else if (module._sdc_test_callbacks !== undefined || module._sdc_test_gguf_offset !== undefined) throw Error('Test probe leaked');
+            await core.api.sd_set_log_callback(0n, 0n);
+            await core.api.sd_set_progress_callback(0n, 0n);
+            const count = logs.length + progress.length;
+            if (variant === 'test') module._sdc_test_callbacks();
+            if (count !== logs.length + progress.length) throw Error('Callback unregistration failed');
+          } finally {
+            await core.api.sd_set_log_callback(0n, 0n);
+            await core.api.sd_set_progress_callback(0n, 0n);
+            module.removeFunction(log); module.removeFunction(update);
           }
-          core.setCallbacks({});
-          const count = logs.length;
-          await core.ccall('sdb_load', 'number', ['string'], ['[]'], { async: true });
-          if (logs.length !== count) throw Error('Callbacks were not cleared');
-          core._sdb_unload();
-          return { passed: true, scope: 'real-Wasm Worker, WORKERFS, invalid input and callbacks; no model/GPU inference' };
+          return { passed: true, scope: 'real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB; no model/GPU inference' };
         };
-        const source = `const run = ${run.toString()}; onmessage = async ({ data }) => { try { postMessage({ result: await run(data) }); } catch (error) { postMessage({ error: String(error.stack || error) }); } };`;
+        const source = `const makeFixture = ${fixtureSource}; const run = ${run.toString()}; onmessage = async ({ data }) => { try { postMessage({ result: await run(data) }); } catch (error) { postMessage({ error: String(error.stack || error) }); } };`;
         const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
         const worker = new Worker(url, { type: 'module' });
         let timer;
@@ -71,12 +94,12 @@ try {
             timer = setTimeout(() => reject(Error(`Worker smoke timed out: ${profile}/${variant}`)), 120000);
             worker.onerror = event => reject(Error(event.message));
             worker.onmessage = ({ data }) => data.error ? reject(Error(data.error)) : resolve({ profile, variant, ...data.result });
-            worker.postMessage({ base: `${location.origin}/profiles/${profile}/${variant}/`, variant });
+            worker.postMessage({ origin: location.origin, base: `${location.origin}/profiles/${profile}/${variant}/`, variant, profile });
           });
         } finally {
           clearTimeout(timer); worker.terminate(); URL.revokeObjectURL(url);
         }
-      }, { profile, variant });
+      }, { profile, variant, fixtureSource: makeFixture.toString() });
       console.log(result);
       const file = path.resolve('build', profile, variant, 'provenance.json');
       const provenance = JSON.parse(await readFile(file, 'utf8'));

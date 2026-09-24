@@ -29,9 +29,10 @@ def metadata(package: Path, repo: str, commit: str, lock: dict, divergences: dic
         for file in profile.values(): file['path'] = 'llama-cpp/' + file['path']
     for file in data['interfaceFiles']: file['path'] = 'llama-cpp/' + file['path']
     # Link full per-variant provenance by digest instead of repeating toolchain and
-    # patch inventories four times in the bounded PR comment.
+    # patch inventories for every profile/variant in the bounded PR comment.
     data['stableDiffusion'] = {'manifest': {'path': 'stable-diffusion-cpp/manifest.json', **identity(package / 'stable-diffusion-cpp/manifest.json')},
-        'abiVersion': sd['abiVersion'], 'upstreams': sd['upstreams'],
+        'abiVersion': sd['abiVersion'], 'schemaSha256': sd['schemaSha256'],
+        'capabilities': sd['capabilities'], 'upstreams': sd['upstreams'],
         'profiles': {name: {'variants': {variant: {'validation': item['validation'],
             'sourceCommit': item['sourceCommit']} for variant, item in profile['variants'].items()}}
             for name, profile in sd['profiles'].items()},

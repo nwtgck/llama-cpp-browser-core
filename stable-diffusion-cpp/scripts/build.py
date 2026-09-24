@@ -67,6 +67,8 @@ def main() -> None:
                '-DSDCB_SOURCE=' + str(prepared / 'stable-diffusion'),
                '-DSDCB_GGML_SOURCE=' + str(prepared / 'ggml/ggml'),
                '-DSDCB_JSPI=' + ('ON' if config['jspi'] else 'OFF'),
+               '-DSDCB_MEMORY64=' + ('ON' if config['memory64'] else 'OFF'),
+               '-DSDCB_MAXIMUM_MEMORY=' + str(config['maximumMemory']),
                '-DEMDAWNWEBGPU_DIR=' + str(dawn)]
     subprocess.run(command, cwd=build, check=True)
     subprocess.run(['cmake', '--build', str(build), '--target', 'core', '--parallel', str(args.jobs)], cwd=build, check=True)
@@ -85,6 +87,9 @@ def main() -> None:
     if stage.exists(): shutil.rmtree(stage)
     shutil.copytree(build / 'runtime', stage / 'runtime')
     shutil.copy2(build / 'provenance.json', stage / 'provenance.json')
+    (stage / 'generated').mkdir()
+    for name in ('schema.json', 'schema.mjs', 'functions.d.ts', 'exports.json'):
+        shutil.copy2(build / 'generated' / name, stage / 'generated' / name)
     if before or after: raise RuntimeError('Source changed; refusing to stage a publishable build')
     if args.include_toolchain_notices:
         from package_notices import stage_toolchain_notices

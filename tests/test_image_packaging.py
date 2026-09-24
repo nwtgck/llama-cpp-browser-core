@@ -16,6 +16,17 @@ spec = importlib.util.spec_from_file_location('image_package_regression', ROOT/'
 image = importlib.util.module_from_spec(spec); spec.loader.exec_module(image)
 
 
+def schema_fixture():
+    return {'abiVersion': 2, 'functions': [], 'records': [], 'constants': []}
+
+def schema_hash():
+    return hashlib.sha256(json.dumps(schema_fixture()).encode()).hexdigest()
+
+def schema_file(name):
+    if name == 'schema.json': return json.dumps(schema_fixture())
+    if name == 'schema.mjs': return 'export default ' + json.dumps({**schema_fixture(), 'schemaSha256': schema_hash()}, separators=(',', ':')) + ';\n'
+    return 'fixture declarations'
+
 def put(root, relative, content):
     path = root/relative; path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content if isinstance(content, bytes) else content.encode())
@@ -44,9 +55,11 @@ class ImagePackaging(unittest.TestCase):
         put(self.ggml, 'tools/unrelated/LICENSE', 'must not be collected')
         self.roots = [self.root.parent/'.tools'/name for name in ('emscripten', 'emdawnwebgpu_pkg')]
         for root in self.roots: put(root, 'LICENSE', 'fixture toolchain notice')
+        for name in image.HELPERS: put(self.root, 'examples/runtime/'+name, 'fixture helper')
         for profile, cfg in image.PROFILES.items():
             for variant, vcfg in image.VARIANTS.items():
                 b = self.build/profile/variant
+                for name in image.API_FILES: put(b, 'generated/'+name, schema_file(name))
                 put(b, 'runtime/core.wasm', b'\0asm\1\0\0\0')  # Only a synthetic package fixture.
                 put(b, 'runtime/core.mjs', 'export default function fixtureOnly() {}')
                 put(b, 'runtime/core.d.ts', 'export default function fixtureOnly(): void;')

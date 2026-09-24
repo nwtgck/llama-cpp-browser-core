@@ -73,7 +73,7 @@ def assemble(inputs: Path, destination: Path) -> None:
         shutil.copy2(ROOT / 'README.md', out / 'README.md')
         pkg = {'name': RUNTIME_NAME, 'version': '0.1.0', 'private': True, 'type': 'module', 'license': 'MIT',
                'files': [*RUNTIMES, 'manifest.json', 'README.md', 'LICENSE'],
-               'exports': {'./llama-cpp/*': './llama-cpp/*', './stable-diffusion-cpp/*': './stable-diffusion-cpp/*',
+               'exports': {'./stable-diffusion-cpp/examples/runtime': {'types': './stable-diffusion-cpp/examples/runtime/index.d.ts', 'import': './stable-diffusion-cpp/examples/runtime/index.mjs'}, './llama-cpp/*': './llama-cpp/*', './stable-diffusion-cpp/*': './stable-diffusion-cpp/*',
                            './manifest.json': './manifest.json',
                            # Legacy imports remain aliases, not duplicate multi-megabyte payloads.
                            './api/*': './llama-cpp/api/*', './profiles/*': './llama-cpp/profiles/*',

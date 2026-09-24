@@ -251,6 +251,7 @@ jobs:
         profile:
           - webgpu-wasm32-asyncify
           - webgpu-wasm32-jspi
+          - webgpu-wasm64-jspi
         variant:
           - browser
           - test
