@@ -21,5 +21,5 @@ target_include_directories(mtmd PRIVATE
 # Regenerate the copy when either input changes, not just when CMake files do.
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${LCB_LLAMA_SOURCE}/tools/mtmd/clip.cpp"
-    "${LCB_MTMD_ROOT}/patches/mtmd-webgpu-bf16.patch"
+    "${LCB_MTMD_ROOT}/upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-webgpu-bf16.patch"
     "${LCB_MTMD_ROOT}/scripts/prepare_mtmd.py")

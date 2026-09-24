@@ -73,7 +73,7 @@ class MtmdOverlayTests(unittest.TestCase):
         if not (upstream / "tools/mtmd/clip.cpp").is_file():
             self.skipTest("Initialize the pinned submodule or set LCB_TEST_LLAMA_SOURCE")
         original = (upstream / "tools/mtmd/clip.cpp").read_bytes()
-        destination = prepare(upstream, self.root / "real-build", ROOT / "patches/mtmd-webgpu-bf16.patch")
+        destination = prepare(upstream, self.root / "real-build", ROOT / "upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-webgpu-bf16.patch")
         self.assertEqual((upstream / "tools/mtmd/clip.cpp").read_bytes(), original)
         compiler = shutil.which("clang++")
         if compiler:

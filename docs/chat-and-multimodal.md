@@ -145,8 +145,10 @@ metadata, not encodable media data. OpenAI message helpers accept text/media mar
 not image URLs or audio payloads; upstream serialization may concatenate media parts.
 
 Subprocess video APIs are excluded (`MTMD_VIDEO=OFF`); applications can supply RGB frames.
-Profiles remain single-threaded. Some upstream audio paths spawn threads, including
-fixed four-thread Parakeet preprocessing, so `n_threads=1` is not a general remedy.
+Profiles remain single-threaded. The build-tree [audio threading overlay](audio-single-thread.md)
+serializes shared mel and Parakeet preprocessing in non-pthread Emscripten builds.
+Qwen3-TTS speaker preprocessing otherwise requests four threads independently of
+`n_threads=1`. This fix requires rebuilt runtime artifacts; it is not a new API.
 Audio generation is experimental upstream. Exposed APIs do not certify model support.
 
 Actions checks all five profiles in browser and test variants, standard type generation, package/schema consistency and size limits,
@@ -166,3 +168,12 @@ still use F16 intermediate storage, so this is not full-F32 arithmetic. Native
 and byte totals, not paths or tensor values. Real-model speed and quality must be
 validated separately; the workaround does not guarantee GPU placement for all
 operations or sizes.
+
+## Upstream audio generation boundary
+
+The core exposes the pinned upstream audio helper without a downstream language
+capability query or waveform-tail optimization. Manual language selection and the
+upstream model default remain available through the existing input contract;
+features in another reference implementation do not imply llama.cpp support.
+The single-thread reference-audio preprocessing workaround is a separate retained
+compatibility exception. See the [exception register](../upstream-patches-only-as-a-last-resort-with-explicit-user-approval/README.md).

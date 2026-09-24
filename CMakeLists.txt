@@ -95,6 +95,10 @@ set(GGML_WEBGPU_JSPI ${LCB_JSPI} CACHE BOOL "" FORCE)
 set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
 add_subdirectory("${LCB_LLAMA_SOURCE}" "llama")
 
+# All browser profiles are single-threaded, including CPU and WebGPU.
+# The overlay retains upstream behavior in native/pthread builds.
+include(cmake/MtmdAudioOverlay.cmake)
+
 if(LCB_WEBGPU AND LCB_WEBGPU_BF16_PROJECTOR)
     include(cmake/MtmdOverlay.cmake)
 endif()

@@ -136,7 +136,8 @@ def generate(source: Path, output: Path, compiler: str) -> dict:
             args.append(wire_type(kind,typ)+' '+arg)
             if kind == 'record':
                 guards.append(f'if (!{arg}) throw std::invalid_argument("null record argument");')
-                callargs.append(f'*((const {typ} *)lcb_checked_pointer({arg}))')
+                qualified = typ if typ.startswith('const ') else 'const ' + typ
+                callargs.append(f'*(({qualified} *)lcb_checked_pointer({arg}))')
             elif kind == 'pointer': callargs.append(f'({typ})lcb_checked_pointer({arg})')
             elif kind == 'u64' and typ in ('size_t', 'uintptr_t'):
                 callargs.append(f'({typ})lcb_checked_pointer({arg})')

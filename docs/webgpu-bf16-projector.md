@@ -15,7 +15,7 @@ WebGPU BF16 kernel implementation. The choice is limited to the pinned backend;
 review or remove it when upstream BF16 support changes.
 
 The vendor submodule is never edited. `scripts/prepare_mtmd.py` copies `clip.cpp`
-into each build tree and applies `patches/mtmd-webgpu-bf16.patch` there. CMake
+into each build tree and applies `upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-webgpu-bf16.patch` there. CMake
 replaces that one mtmd translation unit. The helper is `bridge/mtmd-bf16.h`.
 Configure fails if the patch or upstream target source layout does not match.
 The small allocation-error guard included in the patch is already present in
