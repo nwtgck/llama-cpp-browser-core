@@ -85,6 +85,22 @@ int main() {
             else check(sdc_test_gguf_offset(path)==UINT64_MAX,"malformed GGUF must be rejected");
             std::remove(path);
         }
+        // Exercise both small buffered skips and large 64-bit metadata seeks.
+        // The metadata array is sparse; no multi-GiB allocation/read is needed.
+        for (uint64_t gap : {0ULL, 1ULL, 4096ULL, 4097ULL, 8192ULL, (1ULL << 32) + 16}) {
+            const char* path = "cursor-metadata-test.gguf";
+            std::ofstream out(path, std::ios::binary);
+            u32(out, 0x46554747); u32(out, 3); u64(out, 1); u64(out, 1);
+            str(out, "test.skipped.bytes"); u32(out, 9); u32(out, 0); u64(out, gap);
+            out.seekp(static_cast<std::streamoff>(uint64_t(out.tellp()) + gap));
+            str(out, "weight"); u32(out, 1); u64(out, 1); u32(out, 0); u64(out, 0);
+            const uint64_t offset = (uint64_t(out.tellp()) + 31) / 32 * 32;
+            out.seekp(static_cast<std::streamoff>(offset)); u32(out, 0x3f800000); out.close();
+            check(sdc_test_gguf_offset(path) == offset, "logical cursor after skipped metadata");
+            check(sdc_test_gguf_value(path) == 0x3f800000, "payload after skipped metadata");
+            std::printf("metadata-gap=%llu offset=%llu: passed\n", (unsigned long long)gap, (unsigned long long)offset);
+            std::remove(path);
+        }
         sdc_sd_set_log_callback(uint64_t(uintptr_t(&log_callback)),17);
         sdc_sd_set_progress_callback(uint64_t(uintptr_t(&progress_callback)),19);
         sdc_test_callbacks();

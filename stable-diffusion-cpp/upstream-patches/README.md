@@ -19,6 +19,16 @@ llama.cpp checkout is used only as a source for its `ggml/` subtree.
    ranges/type sizes/counts and keep per-tensor memory limits. Preserve supported
    higher-rank flattening with checked arithmetic. Synchronous random-access
    sources and the decision to disable mmap/prefetch belong to the caller.
+5. GGUF stream cursor: keep the checked logical metadata position in 64 bits
+   instead of calling `tellg()` before every field. Small metadata skips consume
+   the existing stream buffer; large arrays still use a bounded 64-bit seek.
+   This avoids libc++ buffer invalidation without loosening bounds or loading
+   tensor payloads. Remove when upstream provides an equivalent buffered reader.
+
+The smoke fixture reports byte ranges and total bytes rather than guessing from
+read-call counts. Its 4 KiB chunk / 256 KiB total budget applies only to the tiny
+synthetic fixture; it is not a metadata or model size limit in the core. Runtime
+input size and source chunking remain caller-owned.
 
 Real GPU numerical parity, large dispatches, all architectures and quantizations
 are not certified. There is no application resolution cap, sampler selection,

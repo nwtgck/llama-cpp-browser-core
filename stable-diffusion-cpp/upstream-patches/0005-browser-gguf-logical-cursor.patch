@@ -1,0 +1,141 @@
+diff --git a/src/model_io/gguf_reader_ext.h b/src/model_io/gguf_reader_ext.h
+--- a/src/model_io/gguf_reader_ext.h
++++ b/src/model_io/gguf_reader_ext.h
+@@ -26,6 +26,9 @@
+     std::vector<GGUFTensorInfo> tensors_;
+     uint64_t data_offset_ = 0;
+     uint64_t file_size_ = 0;
++    // Logical parser position. tellg() may synchronize/discard libc++'s input
++    // buffer, so querying it before every small field repeatedly rereads data.
++    uint64_t position_ = 0;
+     uint32_t alignment_ = 32;
+ 
+     uint64_t tell(std::ifstream& in) const {
+@@ -33,18 +36,18 @@
+         if (pos < 0) throw std::runtime_error("invalid GGUF file position");
+         return static_cast<uint64_t>(pos);
+     }
+-    uint64_t remaining(std::ifstream& in) const {
+-        const uint64_t pos = tell(in);
+-        if (pos > file_size_) throw std::runtime_error("GGUF position outside file");
+-        return file_size_ - pos;
++    uint64_t remaining() const {
++        if (position_ > file_size_) throw std::runtime_error("GGUF position outside file");
++        return file_size_ - position_;
+     }
+-    void read(std::ifstream& in, char* bytes, size_t count) const {
+-        if (count > remaining(in) || count > static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max()))
++    void read(std::ifstream& in, char* bytes, size_t count) {
++        if (count > remaining() || count > static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max()))
+             throw std::runtime_error("truncated GGUF metadata");
+         in.read(bytes, static_cast<std::streamsize>(count));
+         if (!in) throw std::runtime_error("GGUF read failed");
++        position_ += count;
+     }
+-    template<class T> T integer(std::ifstream& in) const {
++    template<class T> T integer(std::ifstream& in) {
+         // GGUF's little-endian representation, independent of host byte order.
+         uint8_t bytes[sizeof(T)];
+         read(in, reinterpret_cast<char*>(bytes), sizeof(bytes));
+@@ -52,12 +55,22 @@
+         for (size_t i = 0; i < sizeof(T); ++i) value |= uint64_t(bytes[i]) << (8 * i);
+         return static_cast<T>(value);
+     }
+-    void skip(std::ifstream& in, uint64_t count) const {
+-        if (count > remaining(in)) throw std::runtime_error("GGUF metadata extends beyond file");
+-        in.seekg(static_cast<std::streamoff>(tell(in) + count), std::ios::beg);
++    void skip(std::ifstream& in, uint64_t count) {
++        if (count > remaining()) throw std::runtime_error("GGUF metadata extends beyond file");
++        if (count == 0) return;
++        if (count <= 4096) {
++            // Consume small metadata in the existing stream buffer. Large arrays
++            // are still skipped with a 64-bit seek, never read into memory.
++            in.ignore(static_cast<std::streamsize>(count));
++            if (in.gcount() != static_cast<std::streamsize>(count))
++                throw std::runtime_error("truncated GGUF metadata");
++        } else {
++            in.seekg(static_cast<std::streamoff>(position_ + count), std::ios::beg);
++        }
+         if (!in) throw std::runtime_error("GGUF seek failed");
++        position_ += count;
+     }
+-    std::string name(std::ifstream& in) const {
++    std::string name(std::ifstream& in) {
+         const uint64_t count = integer<uint64_t>(in);
+         if (count == 0 || count > 4096) throw std::runtime_error("invalid GGUF name length");
+         std::string value(static_cast<size_t>(count), '\0');
+@@ -74,7 +87,7 @@
+             default: return 0;
+         }
+     }
+-    void value(std::ifstream& in, uint32_t type) const {
++    void value(std::ifstream& in, uint32_t type) {
+         const uint32_t width = scalar_size(type);
+         if (width) { skip(in, width); return; }
+         if (type == 8) { skip(in, integer<uint64_t>(in)); return; }
+@@ -83,10 +96,10 @@
+         const uint64_t count = integer<uint64_t>(in);
+         const uint32_t item_width = scalar_size(element);
+         if (item_width) {
+-            if (count > remaining(in) / item_width) throw std::runtime_error("GGUF array out of bounds");
++            if (count > remaining() / item_width) throw std::runtime_error("GGUF array out of bounds");
+             skip(in, count * item_width);
+         } else if (element == 8) {
+-            if (count > remaining(in) / 8) throw std::runtime_error("GGUF string array out of bounds");
++            if (count > remaining() / 8) throw std::runtime_error("GGUF string array out of bounds");
+             for (uint64_t i = 0; i < count; ++i) skip(in, integer<uint64_t>(in));
+         } else {
+             throw std::runtime_error("invalid GGUF array element type");
+@@ -94,18 +107,19 @@
+     }
+ public:
+     bool load(const std::string& path) {
+-        tensors_.clear(); data_offset_ = 0; alignment_ = 32;
++        tensors_.clear(); data_offset_ = 0; file_size_ = 0; position_ = 0; alignment_ = 32;
+         try {
+             static_assert(sizeof(std::streamoff) >= 8, "GGUF files require 64-bit stream offsets");
+             std::ifstream in(path, std::ios::binary);
+             if (!in) throw std::runtime_error("cannot open GGUF file");
+             in.seekg(0, std::ios::end); file_size_ = tell(in); in.seekg(0);
++            if (!in) throw std::runtime_error("cannot seek GGUF metadata");
+             if (integer<uint32_t>(in) != 0x46554747) throw std::runtime_error("invalid GGUF magic");
+             const uint32_t version = integer<uint32_t>(in);
+             if (version != 2 && version != 3) throw std::runtime_error("unsupported GGUF version");
+             const uint64_t tensors = integer<uint64_t>(in);
+             const uint64_t metadata = integer<uint64_t>(in);
+-            if (tensors > remaining(in) / 24 || metadata > remaining(in) / 13 ||
++            if (tensors > remaining() / 24 || metadata > remaining() / 13 ||
+                 tensors > SIZE_MAX / sizeof(GGUFTensorInfo))
+                 throw std::runtime_error("invalid GGUF counts");
+             bool alignment_seen = false;
+@@ -128,7 +142,7 @@
+                 info.name = name(in);
+                 if (!names.insert(info.name).second) throw std::runtime_error("duplicate GGUF tensor name");
+                 const uint32_t rank = integer<uint32_t>(in);
+-                if (!rank || rank > 64 || rank > remaining(in) / 8) throw std::runtime_error("invalid GGUF tensor rank");
++                if (!rank || rank > 64 || rank > remaining() / 8) throw std::runtime_error("invalid GGUF tensor rank");
+                 uint64_t elements = 1;
+                 for (uint32_t dim = 0; dim < rank; ++dim) {
+                     const uint64_t n = integer<uint64_t>(in);
+@@ -152,10 +166,10 @@
+                 if (info.offset % alignment_) throw std::runtime_error("misaligned GGUF tensor offset");
+                 tensors_.push_back(std::move(info));
+             }
+-            data_offset_ = tell(in);
++            data_offset_ = position_;
+             if (tensors) {
+                 const uint64_t pad = (alignment_ - data_offset_ % alignment_) % alignment_;
+-                if (pad > remaining(in)) throw std::runtime_error("truncated GGUF alignment padding");
++                if (pad > remaining()) throw std::runtime_error("truncated GGUF alignment padding");
+                 data_offset_ += pad;
+             }
+             for (size_t i = 0; i < tensors_.size(); ++i) {
+@@ -165,7 +179,7 @@
+             }
+             return true;
+         } catch (const std::exception& error) {
+-            tensors_.clear(); data_offset_ = 0;
++            tensors_.clear(); data_offset_ = 0; file_size_ = 0; position_ = 0;
+             LOG_ERROR("GGUF metadata: %s", error.what());
+             return false;
+         }

@@ -58,6 +58,18 @@
           "afterSha256": "f789aef10b7cbb320bc730132643bf9e31d47c8defcbe3382ed73f613a584690"
         }
       ]
+    },
+    {
+      "file": "0005-browser-gguf-logical-cursor.patch",
+      "target": "stable-diffusion",
+      "reason": "Keep a 64-bit logical metadata cursor; avoid tellg buffer invalidation and repeated FileReaderSync reads while retaining bounded skips and file checks.",
+      "files": [
+        {
+          "path": "src/model_io/gguf_reader_ext.h",
+          "beforeSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a",
+          "afterSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0"
+        }
+      ]
     }
   ]
 }
