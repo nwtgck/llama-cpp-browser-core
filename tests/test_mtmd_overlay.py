@@ -73,7 +73,24 @@ class MtmdOverlayTests(unittest.TestCase):
         if not (upstream / "tools/mtmd/clip.cpp").is_file():
             self.skipTest("Initialize the pinned submodule or set LCB_TEST_LLAMA_SOURCE")
         original = (upstream / "tools/mtmd/clip.cpp").read_bytes()
-        destination = prepare(upstream, self.root / "real-build", ROOT / "upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-webgpu-bf16.patch")
+        patch = ROOT / "upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-webgpu-bf16.patch"
+        destination = prepare(upstream, self.root / "real-build", patch)
+        # Upstream owns this guard at the v0.5.0 pin. The overlay must preserve
+        # it exactly once, before inspecting any scheduler assignments.
+        guard = ('    if (!ggml_backend_sched_alloc_graph(ctx->sched.get(), gf)) {\n'
+                 '        LOG_ERR("%s: failed to allocate compute graph\\n", __func__);\n'
+                 '        return false;\n'
+                 '    }\n')
+        result = destination.read_text()
+        self.assertEqual(original.decode().count(guard), 1)
+        self.assertEqual(result.count(guard), 1)
+        self.assertEqual(result.count("lcb_clip: matmul placement"), 1)
+        self.assertEqual(result.count("lcb_clip: bf16-f32 tensors="), 1)
+        self.assertLess(result.index(guard), result.index("lcb_clip: matmul placement"))
+        timestamp = destination.stat().st_mtime_ns
+        self.assertEqual(prepare(upstream, self.root / "real-build", patch), destination)
+        self.assertEqual(destination.stat().st_mtime_ns, timestamp)
+        self.assertEqual(destination.read_text(), result)
         self.assertEqual((upstream / "tools/mtmd/clip.cpp").read_bytes(), original)
         compiler = shutil.which("clang++")
         if compiler:

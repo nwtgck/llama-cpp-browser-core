@@ -72,7 +72,7 @@ def collect(root: Path, manifest: dict) -> dict:
             },
             'supportingFiles': {path: file_identity(root / path) for path in supporting},
             'searchHints': ['mtmd-webgpu-bf16', 'LCB_WEBGPU_BF16_PROJECTOR', 'lcb_clip', 'bf16-f32', 'cpu_bf16'],
-            'behavior': 'WebGPU vision BF16 weights become resident F32 weights (2x storage for converted weights); bounded upload, placement diagnostics and loader/allocation guards. Model files remain unchanged.',
+            'behavior': 'WebGPU vision BF16 weights become resident F32 weights (2x storage for converted weights); bounded upload, placement diagnostics and loader guards. Upstream graph-allocation failure handling is preserved. Model files remain unchanged.',
         }, {
             'id': 'single-thread-wasm-audio-preprocessing',
             'kind': 'build-tree-source-overlay',

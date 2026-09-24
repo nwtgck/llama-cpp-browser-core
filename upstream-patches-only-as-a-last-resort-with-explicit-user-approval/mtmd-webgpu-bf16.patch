@@ -123,17 +123,14 @@
                  }
                  LOG_DBG("%s: loaded %zu tensors from %s\n", __func__, tensors_to_load.size(), fname.c_str());
              } else {
-@@ -4436,7 +4491,37 @@
+@@ -4436,10 +4491,35 @@
      // build the inference graph
      ggml_backend_sched_reset(ctx->sched.get());
      ggml_cgraph * gf = clip_get_graph_builder(ctx, imgs, params)->build();
--    ggml_backend_sched_alloc_graph(ctx->sched.get(), gf);
-+    // Backport the allocation guard before reading assignments or running the
-+    // graph; larger resident weights can leave less room for compute buffers.
-+    if (!ggml_backend_sched_alloc_graph(ctx->sched.get(), gf)) {
-+        LOG_ERR("%s: failed to allocate compute graph\n", __func__);
-+        return false;
-+    }
+     if (!ggml_backend_sched_alloc_graph(ctx->sched.get(), gf)) {
+         LOG_ERR("%s: failed to allocate compute graph\n", __func__);
+         return false;
+     }
 +
 +    if (ctx->model.modality == CLIP_MODALITY_VISION &&
 +            lcb_mtmd_is_webgpu(ctx->backend)) {

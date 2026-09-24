@@ -6,10 +6,9 @@ The original reason for carrying source patches was required multimodal
 performance, not general feature expansion. The project owner decides which
 requirements justify upstream maintenance work.
 
-The two retained patch files are unchanged by this directory move. Their input
-is the pristine pinned upstream tree; neither depends on a TTS-generation copy.
-The current reference pin is
-`b29c606e28a01b1bc8c1351026a0fa6e616bf6c4`. Re-evaluate compatibility at each pin
+The two retained patches take the pristine pinned upstream tree as input;
+neither depends on a TTS-generation copy. The current reference pin is v0.5.0,
+`7fe450e19305b828c199d602c23a8337aaa1f03b`. Re-evaluate compatibility at each pin
 update rather than treating that revision or these workarounds as permanent.
 
 ## Vision BF16 compatibility/performance
@@ -24,6 +23,10 @@ update rather than treating that revision or these workarounds as permanent.
 - **Integration:** one `tools/mtmd/clip.cpp` build-tree copy, with the local
   conversion helper in `bridge/mtmd-bf16.h`. Internal loader coupling remains a
   maintenance cost even though the upstream checkout is unchanged.
+- **v0.5.0 maintenance:** upstream now owns the graph-allocation failure check.
+  Keep it as unchanged context and insert the existing placement diagnostics
+  after it, instead of backporting the same guard again. The conversion helper,
+  loader changes, profile scope, and independent audio patch are unchanged.
 - **No-patch alternatives:** compatible weight formats, the existing CPU path,
   or waiting for suitable upstream support; these do not necessarily satisfy
   the required multimodal performance.
