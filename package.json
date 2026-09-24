@@ -5,26 +5,25 @@
   "type": "module",
   "license": "MIT",
   "files": [
-    "examples/",
-    "profiles/",
-    "api/",
+    "llama-cpp",
+    "stable-diffusion-cpp",
     "manifest.json",
-    "licenses/",
     "README.md",
-    "chat-and-multimodal.md",
     "LICENSE"
   ],
   "exports": {
-    "./examples/runtime": {
-      "types": "./examples/runtime/index.d.ts",
-      "import": "./examples/runtime/index.mjs"
-    },
+    "./llama-cpp/*": "./llama-cpp/*",
+    "./stable-diffusion-cpp/*": "./stable-diffusion-cpp/*",
+    "./manifest.json": "./manifest.json",
+    "./api/*": "./llama-cpp/api/*",
+    "./profiles/*": "./llama-cpp/profiles/*",
     "./profiles/*/core.mjs": {
-      "types": "./profiles/*/core.d.ts",
-      "import": "./profiles/*/core.mjs"
+      "types": "./llama-cpp/profiles/*/core.d.ts",
+      "import": "./llama-cpp/profiles/*/core.mjs"
     },
-    "./profiles/*": "./profiles/*",
-    "./api/*": "./api/*",
-    "./manifest.json": "./manifest.json"
+    "./examples/runtime": {
+      "types": "./llama-cpp/examples/runtime/index.d.ts",
+      "import": "./llama-cpp/examples/runtime/index.mjs"
+    }
   }
 }

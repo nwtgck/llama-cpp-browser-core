@@ -1,41 +1,100 @@
-# llama-cpp-browser-core
+# Browser Inference Core
 
-This branch distributes a prebuilt runtime. Source code and build instructions are on the source branches of the same repository. Installing this package does not install Emscripten or compile C/C++.
+One source repository, independent browser runtimes, one append-only `artifacts`
+branch. Existing llama.cpp source has moved to `llama-cpp/`. Image generation is
+an experimental sibling, `stable-diffusion-cpp/`, not an extension of llama's
+model pipeline. Both have their own profile definitions and upstream pins.
+
+```text
+llama-cpp/                  # existing bridge, config, scripts, tests, upstream
+stable-diffusion-cpp/        # new bridge, config, scripts, tests, upstreams
+  upstream-patches/         # explicit user-authorized browser experiment
+toolchain/config.json       # common pinned browser compiler and Dawn
+scripts/                    # common setup, caches, assembly, publication, reporting
+.github/workflows/          # source-bound builds and privileged report boundary
+```
+
+## Migration
+
+The submodule-move instructions below apply only to the initial single-runtime
+layout migration. Skip them when the two runtime directories already exist.
+
+Before applying a patch that moves the llama submodule, start from a clean source
+checkout. `git submodule deinit -- vendor/llama.cpp` safely refuses a dirty
+submodule (do not add `--force`). Apply with `git apply --index`, then run
+`git submodule sync --recursive` and `git submodule update --init --recursive`.
+The old submodule name is retained in `.gitmodules` so its cached Git objects can
+be reused at the new path. Commit all staged changes before building publishable
+artifacts. ZIP source snapshots contain no submodule data.
+
+The current project name is **Browser Inference Core** (`browser-inference-core`).
+This is a provisional name, not an instruction to rename a GitHub repository.
+The installable package name stays `llama-cpp-browser-core` for existing imports;
+publication URLs and install commands use the actual `GITHUB_REPOSITORY` value.
+
+Run runtime-specific commands from their own directories. Root `npm test` runs
+both Node test suites; `npm run test:python` runs all three Python suites.
+Bootstrap the shared compiler from the repository root:
 
 ```sh
-npm install github:nwtgck/llama-cpp-browser-core#ARTIFACT_COMMIT_SHA
+python3 scripts/setup_toolchain.py
+source .tools/emsdk/emsdk_env.sh
 ```
 
-Replace `ARTIFACT_COMMIT_SHA` with the complete commit hash containing the chosen runtime artifacts, not a source commit. No npm registry publication is required.
+Compiler, Dawn and the already-approved Asyncify correction are pinned in
+`toolchain/config.json`. The llama pin stays in
+`llama-cpp/config/toolchain.json`; image pins stay in
+`stable-diffusion-cpp/config/upstreams.json`. Their versions are not coupled.
+Old ignored `llama-cpp/.tools/` contents are no longer read; do not copy them into
+the new shared installation. No submodule relocation is needed for this change.
 
-```js
-import { createCore } from 'llama-cpp-browser-core/examples/runtime';
+## Parallel builds and bounded caches
 
-const core = await createCore({ profile: 'cpu-wasm32' });
-await core.api.llama_backend_init();
-const version = await core.api.llama_version();
-console.log(core.readUtf8(version));
-await core.api.llama_backend_free();
+```text
+host tests ──────────────────┐
+llama compile (10 pairs) ────┴─ llama package + browser checks ──┐
+                                                              ├─ aggregate + publish
+image compile (4 pairs) ─────┬─ image package + browser checks ─┘
+image native checks ────────┘
 ```
 
-The example defaults to `variant: 'browser'` (`ASSERTIONS=0`, `ENVIRONMENT=web,worker`). For Node.js tests use `createCore({ profile: 'cpu-wasm32', variant: 'test' })`; this variant retains assertions and Node.js support. Direct imports use `llama-cpp-browser-core/profiles/cpu-wasm32/browser/core.mjs` or the matching `test/` path. Variants never switch automatically based on the execution environment.
+Only final aggregation waits for both runtimes. Each side transfers its own
+compiler/Dawn license notices and never borrows the other's build artifact.
+Runner availability can still limit actual parallelism.
 
-The dynamically imported modules and their neighboring Wasm assets must be served together. A bundler may not discover them automatically. After copying `profiles/` into a public directory, set `baseURL`, for example `new URL('/runtime/profiles/', location.origin)`. This is an example path, not a required deployment layout. Do not mix generated JavaScript and Wasm from different profiles, variants, or artifact commits.
+CI caches the SHA-256-verified Dawn download, Emscripten's system-library cache,
+and strictly partitioned ccache objects. It always verifies the pinned toolchain,
+configures a fresh build tree and links the current runtime. It never restores
+finished runtime artifacts as a shortcut to a successful build. Cache saving is
+restricted to successful default-branch push builds; PR and other branch builds
+only restore through these configured actions. See
+[the cache and toolchain contract](toolchain/README.md) for trust limits,
+invalidation, and the cold-cache path.
 
-Generated-module types are in each `profiles/<profile>/<variant>/core.d.ts`; normalized C function types are in `api/functions.d.ts`, with layout identifiers in `api/schema.json`. The native core reports actual memory layouts. Manifest format 2 records build settings and performed checks under `profiles[profile].variants[variant]`, plus source commits and all payload hashes. Passing a test-variant check does not establish that the browser variant passed it. The `lcb_` C bindings normalize pointers and sizes to JavaScript `bigint` and replace structure return values with explicit return-storage pointers.
+## Runtime package layout (manifest format 3)
 
-This is not a high-level chat library. Applications own files, workers, generation loops, conversations, cancellation, and data formats. `mountReadOnlyFile` is an optional adapter for synchronous range reads; it does not impose a storage backend.
+```text
+manifest.json
+llama-cpp/manifest.json
+llama-cpp/profiles/<profile>/<variant>/core.{mjs,wasm,d.ts}
+llama-cpp/api/...
+stable-diffusion-cpp/manifest.json
+stable-diffusion-cpp/profiles/<profile>/<variant>/core.{mjs,wasm,d.ts}
+```
 
-`examples/runtime/` is always shipped as tested reference code for application
-TypeScript implementations; importing it is optional. Applications may import a
-profile's generated `core.mjs` directly for Embind and C exports.
-See [native chat and multimodal bindings](chat-and-multimodal.md). The public
-bindings may change with the pinned upstream version.
+Each inner manifest keeps runtime-specific provenance and validation. The root
+manifest hashes the complete tree, including both inner manifests, and refuses
+mixed source commits. npm exports preserve legacy llama import aliases; direct
+filesystem consumers must use `llama-cpp/` and its inner manifest. No duplicate
+Wasm payloads are shipped. Publication waits for both complete runtime packages;
+there is no last-writer-wins replacement of one runtime with the other.
 
-All profiles are single-threaded. `webgpu-wasm64-jspi`, `webgpu-wasm32-jspi`, and `webgpu-wasm32-asyncify` are experimental and require device-specific testing. Both wasm32 profiles have a 4 GiB linear-memory ceiling and do not require memory64. `webgpu-wasm32-jspi` uses JSPI without Asyncify; its native Promise exports work with the example loader's default completion path. The Asyncify profile does not require JSPI; use its example loader or `ccall(..., { async: true })` to await suspended native calls. Feature-detect WebGPU and Wasm support in the application; a profile does not certify any browser or device. A successful build, a synthetic-model smoke test, and support for a large production model are separate claims; consult the manifest for the checks actually performed.
+Naidan can keep its current llama dependency unchanged and install this artifact
+under the separate dependency name `stable-diffusion-cpp-browser-core` using the
+exact install command generated after successful publication. Never put a
+fictional artifact commit into a consumer lockfile. A local `dist/package` may
+also be selected explicitly for development.
 
-The upstream GPU loader can allocate a tensor-sized staging buffer. This runtime has not replaced that path with bounded staging. Limiting individual file reads does not bound every allocation in the loader.
-
-Project code is MIT-licensed. Upstream and toolchain notices are under `licenses/`.
-Original headers retained as `.txt` under `licenses/embedded/` preserve embedded
-notices verbatim; they are not build inputs. Model weights are not included.
+The image runtime is experimental. Native tests, browser ABI smoke checks and
+compilation are distinct from actual GPU image generation. Consult each profile's
+recorded validation scope; real-model inference is not asserted automatically.

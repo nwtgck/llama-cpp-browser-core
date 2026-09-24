@@ -1,0 +1,18 @@
+{
+  "name": "stable-diffusion-cpp-browser-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "profiles/",
+    "licenses/",
+    "manifest.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    "./profiles/*": "./profiles/*",
+    "./manifest.json": "./manifest.json"
+  }
+}
