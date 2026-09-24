@@ -1,0 +1,18 @@
+{
+  "webgpu-wasm32-asyncify": {
+    "memory64": false,
+    "webgpu": true,
+    "jspi": false,
+    "asyncify": true,
+    "pthreads": false,
+    "maximumMemory": 4294967296
+  },
+  "webgpu-wasm32-jspi": {
+    "memory64": false,
+    "webgpu": true,
+    "jspi": true,
+    "asyncify": false,
+    "pthreads": false,
+    "maximumMemory": 4294967296
+  }
+}

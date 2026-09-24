@@ -8,6 +8,10 @@ on:
     types: [opened, reopened, synchronize]
   workflow_dispatch:
 
+defaults:
+  run:
+    working-directory: llama-cpp
+
 permissions:
   contents: read
   actions: read

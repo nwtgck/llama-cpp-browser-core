@@ -20,6 +20,10 @@ on:
 
 # Read-only defaults for jobs without their own permissions. This is not a cap:
 # jobs.update.permissions overrides it with the write access needed for git push.
+defaults:
+  run:
+    working-directory: llama-cpp
+
 permissions:
   contents: read
 
@@ -56,6 +60,6 @@ jobs:
         if: always()
         with:
           name: upstream-update-report
-          path: build/upstream-update/
+          path: llama-cpp/build/upstream-update/
           if-no-files-found: ignore
           retention-days: 14

@@ -21,6 +21,11 @@ STABLE = re.compile(r'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z')
 NIGHTLY = re.compile(r'b[0-9]+\Z')
 PINS = {'vendor/llama.cpp', 'config/toolchain.json'}
 
+def repository_path(root: Path, relative: str) -> str:
+    prefix = git('rev-parse', '--show-prefix', cwd=root).stdout.strip()
+    return prefix + relative
+
+
 
 def checked_ref(value: str) -> str:
     # Deliberately exclude revision expressions, options, URLs and abbreviated
@@ -109,7 +114,7 @@ def change_pins(root: Path, commit: str) -> None:
     toolchain['llamaCommit'] = commit
     (root / 'config/toolchain.json').write_text(json.dumps(toolchain, indent=2) + '\n')
     git('add', '--', *sorted(PINS), cwd=root)
-    changed = set(git('diff', '--cached', '--name-only', cwd=root).stdout.splitlines())
+    changed = set(git('diff', '--cached', '--name-only', '--relative', cwd=root).stdout.splitlines())
     if changed != PINS:
         raise ValueError('Updater may change only the submodule gitlink and llamaCommit')
 
@@ -197,7 +202,7 @@ def propose(root: Path, api: GitHub, repository: str, base: str, target: dict,
         # potentially stale probe SHA (which might not even be fetched).
         head = full_sha(git('rev-parse', '--verify', 'FETCH_HEAD', cwd=root).stdout.strip())
         # Only validate its pins. Any human fixes on a previous attempt survive.
-        pins = json.loads(git('show', head + ':config/toolchain.json', cwd=root).stdout)
+        pins = json.loads(git('show', head + ':' + repository_path(root, 'config/toolchain.json'), cwd=root).stdout)
         link = git('ls-tree', head, '--', 'vendor/llama.cpp', cwd=root).stdout.split()
         if pins.get('llamaCommit') != target['commit'] or len(link) != 4 or link[:3] != ['160000', 'commit', target['commit']]:
             raise ValueError('Existing updater branch has different pins; refusing to overwrite it')

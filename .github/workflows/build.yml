@@ -20,6 +20,10 @@ on:
 env:
   LCB_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
 
+defaults:
+  run:
+    working-directory: llama-cpp
+
 permissions:
   contents: read
 
@@ -47,6 +51,7 @@ jobs:
         run: |
           npm test
           python3 -m unittest discover -s tests -p 'test_*.py'
+          python3 -m unittest discover -s ../tests -p 'test_*.py'
       - name: Test bounded BF16 weight expansion with native GGML
         run: |
           cmake -S tests/mtmd-bf16 -B build/mtmd-bf16-tests -DLCB_LLAMA_SOURCE="$PWD/vendor/llama.cpp"
@@ -108,7 +113,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: profile-build-${{ matrix.profile }}-${{ matrix.variant }}
-          path: build/ci-upload/
+          path: llama-cpp/build/ci-upload/
           if-no-files-found: error
           # The staging script copies runtime/API/provenance and license files only.
           include-hidden-files: true
@@ -137,7 +142,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: profile-build-*
-          path: build/
+          path: llama-cpp/build/
           # Every shard owns one profile/variant pair; only wasm64 WebGPU JSPI/browser supplies notices.
           merge-multiple: true
       - name: Assemble runtime-only package
@@ -164,8 +169,8 @@ jobs:
           python3 scripts/package_runtime.py --verify-only
       - uses: actions/upload-artifact@v4
         with:
-          name: runtime-package
-          path: dist/package/
+          name: llama-runtime-package
+          path: llama-cpp/dist/package/
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 14
@@ -176,8 +181,126 @@ jobs:
           git diff --stat
           git diff --cached --stat
           git submodule foreach --recursive 'git status --short --untracked-files=all --ignore-submodules=none'
+  image-native:
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: stable-diffusion-cpp
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LCB_SOURCE_COMMIT }}
+          submodules: recursive
+          persist-credentials: false
+      - name: Test exact patch preparation and host code
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Native bridge and actual patched normalization tests
+        run: |
+          python3 scripts/prepare_upstream.py --output build/native-src
+          cmake -S . -B build/native -G Ninja \
+            -DSDCB_NATIVE_CHECK=ON -DCMAKE_BUILD_TYPE=Release \
+            '-DCMAKE_CXX_FLAGS_RELEASE=-O1 -DNDEBUG' \
+            -DSDCB_SOURCE="$PWD/build/native-src/stable-diffusion" \
+            -DSDCB_GGML_SOURCE="$PWD/build/native-src/ggml/ggml"
+          cmake --build build/native --parallel 2
+          ctest --test-dir build/native --output-on-failure
+  image-compile:
+    needs: test
+    name: Image ${{ matrix.profile }} / ${{ matrix.variant }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: stable-diffusion-cpp
+    strategy:
+      fail-fast: false
+      matrix:
+        profile:
+          - webgpu-wasm32-asyncify
+          - webgpu-wasm32-jspi
+        variant:
+          - browser
+          - test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LCB_SOURCE_COMMIT }}
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Install build prerequisites
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang cmake
+      - name: Install the same pinned browser toolchain
+        run: python3 ../llama-cpp/scripts/setup_toolchain.py
+      - name: Build image profile
+        env:
+          PROFILE: ${{ matrix.profile }}
+          VARIANT: ${{ matrix.variant }}
+        shell: bash
+        run: |
+          source ../llama-cpp/.tools/emsdk/emsdk_env.sh
+          python3 scripts/build.py --profile "$PROFILE" --variant "$VARIANT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-build-${{ matrix.profile }}-${{ matrix.variant }}
+          path: stable-diffusion-cpp/build/ci-upload/
+          if-no-files-found: error
+          compression-level: 1
+          retention-days: 14
+  image-build:
+    needs: [image-native, image-compile, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: stable-diffusion-cpp
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LCB_SOURCE_COMMIT }}
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: image-build-*
+          path: stable-diffusion-cpp/build/
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: profile-build-webgpu-wasm64-jspi-browser
+          path: llama-cpp/build/
+      - name: Package image runtime
+        run: |
+          python3 scripts/package_runtime.py \
+            --license-root ../llama-cpp/build/toolchain-licenses/emscripten \
+            --license-root ../llama-cpp/build/toolchain-licenses/emdawnwebgpu_pkg
+      - name: Real Wasm ABI smoke (not image inference)
+        run: |
+          npm install --prefix ../llama-cpp/.tools/browser --no-save --package-lock=false playwright@1.58.2
+          ../llama-cpp/.tools/browser/node_modules/.bin/playwright install --with-deps chromium
+          node tests/browser-smoke.mjs dist/package
+          python3 scripts/package_runtime.py \
+            --license-root ../llama-cpp/build/toolchain-licenses/emscripten \
+            --license-root ../llama-cpp/build/toolchain-licenses/emdawnwebgpu_pkg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-runtime-package
+          path: stable-diffusion-cpp/dist/package/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 14
   publish:
-    needs: build
+    needs: [build, image-build]
+    defaults:
+      run:
+        working-directory: .
     # Ordinary same-repository PR heads have the same publication trust as
     # source pushes. Fork PRs and Dependabot runs never receive write credentials.
     if: >-
@@ -198,8 +321,14 @@ jobs:
           node-version: '22.16.0'
       - uses: actions/download-artifact@v4
         with:
-          name: runtime-package
-          path: dist/package/
+          name: llama-runtime-package
+          path: build/package-inputs/llama-cpp/
+      - uses: actions/download-artifact@v4
+        with:
+          name: image-runtime-package
+          path: build/package-inputs/stable-diffusion-cpp/
+      - name: Assemble both source-bound runtimes
+        run: python3 scripts/package_runtime.py
       - name: Verify package source before publication
         run: |
           python3 - <<'PYVERIFY'

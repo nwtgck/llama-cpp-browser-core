@@ -1,0 +1,40 @@
+--- a/src/core/ggml_extend.cpp
++++ b/src/core/ggml_extend.cpp
+@@ -152,10 +152,27 @@
+     return x;
+ }
+ 
++// Browser WebGPU does not implement GROUP_NORM directly. For contiguous
++// channel-divisible F32 tensors, each group is one row of the existing NORM.
++// Retain upstream GROUP_NORM (and CPU fallback) for every other shape/type.
++static ggml_tensor* sd_browser_group_norm(ggml_context* ctx, ggml_tensor* x,
++                                          int groups, float eps) {
++#ifdef SD_BROWSER_WEBGPU
++    if (groups > 0 && x->type == GGML_TYPE_F32 && ggml_is_contiguous(x) &&
++        x->ne[2] % groups == 0) {
++        auto rows = ggml_reshape_2d(ctx, x,
++            x->ne[0] * x->ne[1] * (x->ne[2] / groups), groups * x->ne[3]);
++        auto normalized = ggml_norm(ctx, rows, eps);
++        return ggml_reshape_4d(ctx, normalized, x->ne[0], x->ne[1], x->ne[2], x->ne[3]);
++    }
++#endif
++    return ggml_group_norm(ctx, x, groups, eps);
++}
++
+ ggml_tensor* ggml_ext_group_norm_32(ggml_context* ctx,
+                                     ggml_tensor* a) {
+     const float eps = 1e-6f;  // default eps parameter
+-    return ggml_group_norm(ctx, a, 32, eps);
++    return sd_browser_group_norm(ctx, a, 32, eps);
+ }
+ 
+ static bool ggml_ext_is_padded_1d(const ggml_tensor* x) {
+@@ -822,7 +839,7 @@
+         b = ggml_reshape_4d(ctx, b, 1, 1, b->ne[0], 1);
+     }
+ 
+-    x = ggml_group_norm(ctx, x, num_groups, eps);
++    x = sd_browser_group_norm(ctx, x, num_groups, eps);
+     if (w != nullptr && b != nullptr) {
+         x = ggml_mul_inplace(ctx, x, w);
+         x = ggml_add_inplace(ctx, x, b);

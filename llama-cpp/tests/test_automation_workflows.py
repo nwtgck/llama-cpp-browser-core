@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class WorkflowBoundaries(unittest.TestCase):
     def setUp(self):
-        folder = ROOT / '.github/workflows'
+        folder = ROOT.parent / '.github/workflows'
         self.build = (folder / 'build.yml').read_text()
         self.update = (folder / 'update-llama-cpp.yml').read_text()
         self.report = (folder / 'runtime-comments.yml').read_text()
@@ -29,7 +29,7 @@ class WorkflowBoundaries(unittest.TestCase):
         self.assertNotIn('concurrency:', self.build)
 
     def test_matrix_has_no_artificial_parallelism_cap(self):
-        for workflow in (ROOT / '.github/workflows').glob('*.yml'):
+        for workflow in (ROOT.parent / '.github/workflows').glob('*.yml'):
             with self.subTest(workflow=workflow.name):
                 self.assertNotRegex(workflow.read_text(), r'(?m)^\s*max-parallel\s*:')
         self.assertIn('# Intentionally omit max-parallel:', self.build)
@@ -41,8 +41,8 @@ class WorkflowBoundaries(unittest.TestCase):
 
     def test_all_jobs_check_out_the_same_immutable_head_not_the_merge_commit(self):
         self.assertIn('LCB_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}', self.build)
-        self.assertEqual(self.build.count('ref: ${{ env.LCB_SOURCE_COMMIT }}'), 4)
-        self.assertEqual(self.build.count('persist-credentials: false'), 4)
+        self.assertEqual(self.build.count('ref: ${{ env.LCB_SOURCE_COMMIT }}'), 7)
+        self.assertEqual(self.build.count('persist-credentials: false'), 7)
         self.assertNotIn('expected_source', self.build)
         self.assertIn('test "$(git rev-parse HEAD)" = "$LCB_SOURCE_COMMIT"', self.build)
         self.assertIn("source != os.environ['LCB_SOURCE_COMMIT']", self.build)

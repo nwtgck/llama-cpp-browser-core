@@ -1,0 +1,41 @@
+{
+  "formatVersion": 1,
+  "patches": [
+    {
+      "file": "0001-single-thread-model-reader.patch",
+      "target": "stable-diffusion",
+      "reason": "Execute the model-reader closure inline for single-threaded Emscripten, preserving native/pthread behavior.",
+      "files": [
+        {
+          "path": "src/model_loader.cpp",
+          "beforeSha256": "0648fbd54c0df589e1998c51f63218953a975621002fbd791e14f8f8adc1abf2",
+          "afterSha256": "eb8db6b06769bffbcf15f16dc7d0e449694a7645a66f945dfdc0e7c67440af8d"
+        }
+      ]
+    },
+    {
+      "file": "0002-webgpu-group-normalization.patch",
+      "target": "stable-diffusion",
+      "reason": "Lower the two group-normalization entry points to existing NORM where equivalent, with CPU reference tests.",
+      "files": [
+        {
+          "path": "src/core/ggml_extend.cpp",
+          "beforeSha256": "977e8f21083ac57aafe7e8438f8adaaf040ec0f125f6ca187609e01c3b39a8e2",
+          "afterSha256": "6c5b78a3ca84f5818e6c84f1970e18ee954e812d47211cd7a82e5271ae1ad783"
+        }
+      ]
+    },
+    {
+      "file": "0003-webgpu-unknown-memory-capacity.patch",
+      "target": "ggml",
+      "reason": "Do not misreport maxBufferSize as total/free GPU memory. Scoped to the image runtime; its bridge requires a positive budget.",
+      "files": [
+        {
+          "path": "ggml/src/ggml-webgpu/ggml-webgpu.cpp",
+          "beforeSha256": "30c099a6af5168b4a5ebabbe22a27838b9fd373bd008e70a73493ff60903537e",
+          "afterSha256": "661ac0197d0057d15c8ab39a63e5e79d98b6974c167f9f01deac978b7c29cd7a"
+        }
+      ]
+    }
+  ]
+}

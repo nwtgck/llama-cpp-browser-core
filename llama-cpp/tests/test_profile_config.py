@@ -15,7 +15,7 @@ import build
 class ProfileConfiguration(unittest.TestCase):
     def test_ci_builds_every_packaged_profile(self):
         profiles = json.loads((ROOT / 'config/profiles.json').read_text())
-        workflow = (ROOT / '.github/workflows/build.yml').read_text()
+        workflow = (ROOT.parent / '.github/workflows/build.yml').read_text()
         matrix = workflow.split('        profile:\n', 1)[1].split('        variant:', 1)[0]
         self.assertEqual(set(re.findall(r'^          - ([a-z0-9-]+)$', matrix, re.MULTILINE)),
                          set(profiles))
