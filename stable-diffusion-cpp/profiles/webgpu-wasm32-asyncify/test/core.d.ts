@@ -1,33 +1,28 @@
-/** Stable Diffusion browser bridge ABI 1. One serial request per instance. */
-export interface StableDiffusionCore {
+/** Policy-free native module ABI 2. Use the optional examples/runtime helpers. */
+export interface StableDiffusionModule {
   HEAPU8: Uint8Array;
-  setCallbacks(callbacks: Pick<CoreOptions, 'onProgress' | 'onLog'>): void;
-  /** Test variant only. Synthetic callback delivery, not inference. */
-  _sdb_test_callbacks?(): void;
-  FS: {
-    mkdir(path: string): unknown;
-    mount(type: unknown, options: { blobs: { name: string; data: Blob }[] }, path: string): unknown;
-    unmount(path: string): unknown;
-  };
-  WORKERFS: unknown;
-  ccall(name: 'sdb_load' | 'sdb_generate', result: 'number', types: ['string'], args: [string], options: { async: true }): Promise<number>;
-  _sdb_abi_version(): number;
-  _sdb_error(): number;
-  _sdb_model_version(): number;
-  _sdb_image_data(): number;
-  _sdb_image_width(): number;
-  _sdb_image_height(): number;
-  _sdb_release_image(): void;
-  _sdb_unload(): void;
-  UTF8ToString(pointer: number): string;
+  /** Emscripten's JS filesystem. Storage and mounts belong to the caller. */
+  FS: object;
+  addFunction(callback: (...args: (number | bigint)[]) => number | void, signature: string): number | bigint;
+  removeFunction(pointer: number | bigint): void;
+  ccall(name: string, result: 'number' | 'bigint' | null, types: string[], args: unknown[], options?: { async: boolean }): unknown;
+  _sdc_abi_version(): number;
+  _sdc_pointer_bytes(): number;
+  _sdc_schema_hash(): bigint;
+  _sdc_malloc(bytes: bigint): bigint;
+  _sdc_free(pointer: bigint): void;
+  _sdc_sizeof_record(record: number): bigint;
+  _sdc_alignof_record(record: number): bigint;
+  _sdc_offsetof_field(record: number, field: number): bigint;
+  _sdc_sizeof_field(record: number, field: number): bigint;
+  _sdc_constant(id: number): bigint;
+  [exportName: string]: unknown;
 }
 export interface CoreOptions {
-  wasmBinary: Uint8Array;
-  locateFile(path: string): string;
+  wasmBinary?: Uint8Array;
+  locateFile?(path: string): string;
   print?(text: string): void;
   printErr?(text: string): void;
   onAbort?(reason: unknown): void;
-  onProgress?(step: number, steps: number, seconds: number): void;
-  onLog?(level: number, text: string): void;
 }
-export default function createStableDiffusionCore(options: CoreOptions): Promise<StableDiffusionCore>;
+export default function createStableDiffusionCore(options?: CoreOptions): Promise<StableDiffusionModule>;

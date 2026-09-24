@@ -5,6 +5,8 @@
   "type": "module",
   "license": "MIT",
   "files": [
+    "api/",
+    "examples/",
     "profiles/",
     "licenses/",
     "manifest.json",
@@ -12,6 +14,11 @@
     "LICENSE"
   ],
   "exports": {
+    "./examples/runtime": {
+      "types": "./examples/runtime/index.d.ts",
+      "import": "./examples/runtime/index.mjs"
+    },
+    "./api/*": "./api/*",
     "./profiles/*": "./profiles/*",
     "./manifest.json": "./manifest.json"
   }

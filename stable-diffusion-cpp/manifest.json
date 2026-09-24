@@ -1,8 +1,14 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "runtime": "stable-diffusion-cpp",
-  "abiVersion": 1,
-  "sourceCommit": "9a96dc4352bbbd5616d001e08ea7d65b34758ae7",
+  "abiVersion": 2,
+  "schemaSha256": "6b733b706f0110c79844ec106c4393868fd5ac97ee3033b23084f17c8d52293d",
+  "capabilities": {
+    "ggufFileOffsetBits": 64,
+    "callerOwnedRandomAccess": true,
+    "upstreamApi": true
+  },
+  "sourceCommit": "1a354989ff799210eaf3b14c26970ada4cf3cbfc",
   "upstreams": {
     "stable-diffusion": {
       "path": "vendor/stable-diffusion.cpp",
@@ -23,7 +29,7 @@
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm32-asyncify",
           "variant": "browser",
-          "sourceCommit": "9a96dc4352bbbd5616d001e08ea7d65b34758ae7",
+          "sourceCommit": "1a354989ff799210eaf3b14c26970ada4cf3cbfc",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -78,10 +84,12 @@
             "-DSDCB_SOURCE=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp/build/webgpu-wasm32-asyncify/browser/prepared/stable-diffusion",
             "-DSDCB_GGML_SOURCE=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp/build/webgpu-wasm32-asyncify/browser/prepared/ggml/ggml",
             "-DSDCB_JSPI=OFF",
+            "-DSDCB_MEMORY64=OFF",
+            "-DSDCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "7b4aceab78d95795ede233c23c79f0e255e5faec6010946b9eca7bafd9c19ffe",
+            "inventorySha256": "d1ae2ca50df40734cf4100939eb04148e4a26c154c984dc4b2fed94513b9b5f9",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -112,7 +120,7 @@
               {
                 "file": "0003-webgpu-unknown-memory-capacity.patch",
                 "target": "ggml",
-                "reason": "Do not misreport maxBufferSize as total/free GPU memory. Scoped to the image runtime; its bridge requires a positive budget.",
+                "reason": "Do not misreport maxBufferSize as total/free GPU memory. Image callers must supply an explicit budget when live capacity is unknown.",
                 "files": [
                   {
                     "path": "ggml/src/ggml-webgpu/ggml-webgpu.cpp",
@@ -121,11 +129,47 @@
                   }
                 ],
                 "sha256": "17a689662da25a462a70542fcf096c14315b8824e0f6efdf8c17c10e9a1cca94"
+              },
+              {
+                "file": "0004-browser-gguf-64bit-file-offsets.patch",
+                "target": "stable-diffusion",
+                "reason": "Read unsplit GGUF metadata without whole-file size_t accumulation; preserve 64-bit file positions, validate metadata and leave tensor payloads lazy.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "3b36d1ef883f196b5e6847ec817fd20a7146301ee6bd3a86920e86fa72715586",
+                    "afterSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a"
+                  },
+                  {
+                    "path": "src/model_io/gguf_io.cpp",
+                    "beforeSha256": "976065ada0e5ab3b3d7d7581e1e853ea2f5653d0226a8e38d85ee80d35f09d55",
+                    "afterSha256": "5735b65ddf5d79c2dee028f6987aaa7c346bcb565bc279274d29137fb9ee01a9"
+                  },
+                  {
+                    "path": "src/model_io/tensor_storage.h",
+                    "beforeSha256": "fb37fe9c75080e6ec9989fe178ff6c47c2e7238f85bb70d12bd7c8c472327d44",
+                    "afterSha256": "f789aef10b7cbb320bc730132643bf9e31d47c8defcbe3382ed73f613a584690"
+                  }
+                ],
+                "sha256": "d70f53c5fcb7eb305a6e7912fcb7b03c35dafaff10cda24691d8f992543277c0"
+              },
+              {
+                "file": "0005-browser-gguf-logical-cursor.patch",
+                "target": "stable-diffusion",
+                "reason": "Keep a 64-bit logical metadata cursor; avoid tellg buffer invalidation and repeated FileReaderSync reads while retaining bounded skips and file checks.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a",
+                    "afterSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0"
+                  }
+                ],
+                "sha256": "ce64c95fb7edcae2603e108a4fb0f35e0f32d3a3d5121828b38394d0e66b1780"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790253407,
+          "builtAtUnix": 1790264950,
           "buildCache": {
             "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
@@ -134,14 +178,14 @@
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, WORKERFS, invalid input and callbacks; no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB; no model/GPU inference"
           }
         },
         "test": {
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm32-asyncify",
           "variant": "test",
-          "sourceCommit": "9a96dc4352bbbd5616d001e08ea7d65b34758ae7",
+          "sourceCommit": "1a354989ff799210eaf3b14c26970ada4cf3cbfc",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -196,10 +240,12 @@
             "-DSDCB_SOURCE=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp/build/webgpu-wasm32-asyncify/test/prepared/stable-diffusion",
             "-DSDCB_GGML_SOURCE=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp/build/webgpu-wasm32-asyncify/test/prepared/ggml/ggml",
             "-DSDCB_JSPI=OFF",
+            "-DSDCB_MEMORY64=OFF",
+            "-DSDCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "7b4aceab78d95795ede233c23c79f0e255e5faec6010946b9eca7bafd9c19ffe",
+            "inventorySha256": "d1ae2ca50df40734cf4100939eb04148e4a26c154c984dc4b2fed94513b9b5f9",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -230,7 +276,7 @@
               {
                 "file": "0003-webgpu-unknown-memory-capacity.patch",
                 "target": "ggml",
-                "reason": "Do not misreport maxBufferSize as total/free GPU memory. Scoped to the image runtime; its bridge requires a positive budget.",
+                "reason": "Do not misreport maxBufferSize as total/free GPU memory. Image callers must supply an explicit budget when live capacity is unknown.",
                 "files": [
                   {
                     "path": "ggml/src/ggml-webgpu/ggml-webgpu.cpp",
@@ -239,11 +285,47 @@
                   }
                 ],
                 "sha256": "17a689662da25a462a70542fcf096c14315b8824e0f6efdf8c17c10e9a1cca94"
+              },
+              {
+                "file": "0004-browser-gguf-64bit-file-offsets.patch",
+                "target": "stable-diffusion",
+                "reason": "Read unsplit GGUF metadata without whole-file size_t accumulation; preserve 64-bit file positions, validate metadata and leave tensor payloads lazy.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "3b36d1ef883f196b5e6847ec817fd20a7146301ee6bd3a86920e86fa72715586",
+                    "afterSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a"
+                  },
+                  {
+                    "path": "src/model_io/gguf_io.cpp",
+                    "beforeSha256": "976065ada0e5ab3b3d7d7581e1e853ea2f5653d0226a8e38d85ee80d35f09d55",
+                    "afterSha256": "5735b65ddf5d79c2dee028f6987aaa7c346bcb565bc279274d29137fb9ee01a9"
+                  },
+                  {
+                    "path": "src/model_io/tensor_storage.h",
+                    "beforeSha256": "fb37fe9c75080e6ec9989fe178ff6c47c2e7238f85bb70d12bd7c8c472327d44",
+                    "afterSha256": "f789aef10b7cbb320bc730132643bf9e31d47c8defcbe3382ed73f613a584690"
+                  }
+                ],
+                "sha256": "d70f53c5fcb7eb305a6e7912fcb7b03c35dafaff10cda24691d8f992543277c0"
+              },
+              {
+                "file": "0005-browser-gguf-logical-cursor.patch",
+                "target": "stable-diffusion",
+                "reason": "Keep a 64-bit logical metadata cursor; avoid tellg buffer invalidation and repeated FileReaderSync reads while retaining bounded skips and file checks.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a",
+                    "afterSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0"
+                  }
+                ],
+                "sha256": "ce64c95fb7edcae2603e108a4fb0f35e0f32d3a3d5121828b38394d0e66b1780"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790253507,
+          "builtAtUnix": 1790264953,
           "buildCache": {
             "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
@@ -252,7 +334,7 @@
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, WORKERFS, invalid input and callbacks; no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB; no model/GPU inference"
           }
         }
       }
@@ -263,7 +345,7 @@
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm32-jspi",
           "variant": "browser",
-          "sourceCommit": "9a96dc4352bbbd5616d001e08ea7d65b34758ae7",
+          "sourceCommit": "1a354989ff799210eaf3b14c26970ada4cf3cbfc",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -318,10 +400,12 @@
             "-DSDCB_SOURCE=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp/build/webgpu-wasm32-jspi/browser/prepared/stable-diffusion",
             "-DSDCB_GGML_SOURCE=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp/build/webgpu-wasm32-jspi/browser/prepared/ggml/ggml",
             "-DSDCB_JSPI=ON",
+            "-DSDCB_MEMORY64=OFF",
+            "-DSDCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "7b4aceab78d95795ede233c23c79f0e255e5faec6010946b9eca7bafd9c19ffe",
+            "inventorySha256": "d1ae2ca50df40734cf4100939eb04148e4a26c154c984dc4b2fed94513b9b5f9",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -352,7 +436,7 @@
               {
                 "file": "0003-webgpu-unknown-memory-capacity.patch",
                 "target": "ggml",
-                "reason": "Do not misreport maxBufferSize as total/free GPU memory. Scoped to the image runtime; its bridge requires a positive budget.",
+                "reason": "Do not misreport maxBufferSize as total/free GPU memory. Image callers must supply an explicit budget when live capacity is unknown.",
                 "files": [
                   {
                     "path": "ggml/src/ggml-webgpu/ggml-webgpu.cpp",
@@ -361,11 +445,47 @@
                   }
                 ],
                 "sha256": "17a689662da25a462a70542fcf096c14315b8824e0f6efdf8c17c10e9a1cca94"
+              },
+              {
+                "file": "0004-browser-gguf-64bit-file-offsets.patch",
+                "target": "stable-diffusion",
+                "reason": "Read unsplit GGUF metadata without whole-file size_t accumulation; preserve 64-bit file positions, validate metadata and leave tensor payloads lazy.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "3b36d1ef883f196b5e6847ec817fd20a7146301ee6bd3a86920e86fa72715586",
+                    "afterSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a"
+                  },
+                  {
+                    "path": "src/model_io/gguf_io.cpp",
+                    "beforeSha256": "976065ada0e5ab3b3d7d7581e1e853ea2f5653d0226a8e38d85ee80d35f09d55",
+                    "afterSha256": "5735b65ddf5d79c2dee028f6987aaa7c346bcb565bc279274d29137fb9ee01a9"
+                  },
+                  {
+                    "path": "src/model_io/tensor_storage.h",
+                    "beforeSha256": "fb37fe9c75080e6ec9989fe178ff6c47c2e7238f85bb70d12bd7c8c472327d44",
+                    "afterSha256": "f789aef10b7cbb320bc730132643bf9e31d47c8defcbe3382ed73f613a584690"
+                  }
+                ],
+                "sha256": "d70f53c5fcb7eb305a6e7912fcb7b03c35dafaff10cda24691d8f992543277c0"
+              },
+              {
+                "file": "0005-browser-gguf-logical-cursor.patch",
+                "target": "stable-diffusion",
+                "reason": "Keep a 64-bit logical metadata cursor; avoid tellg buffer invalidation and repeated FileReaderSync reads while retaining bounded skips and file checks.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a",
+                    "afterSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0"
+                  }
+                ],
+                "sha256": "ce64c95fb7edcae2603e108a4fb0f35e0f32d3a3d5121828b38394d0e66b1780"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790253433,
+          "builtAtUnix": 1790264814,
           "buildCache": {
             "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
@@ -374,14 +494,14 @@
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, WORKERFS, invalid input and callbacks; no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB; no model/GPU inference"
           }
         },
         "test": {
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm32-jspi",
           "variant": "test",
-          "sourceCommit": "9a96dc4352bbbd5616d001e08ea7d65b34758ae7",
+          "sourceCommit": "1a354989ff799210eaf3b14c26970ada4cf3cbfc",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -436,10 +556,12 @@
             "-DSDCB_SOURCE=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp/build/webgpu-wasm32-jspi/test/prepared/stable-diffusion",
             "-DSDCB_GGML_SOURCE=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp/build/webgpu-wasm32-jspi/test/prepared/ggml/ggml",
             "-DSDCB_JSPI=ON",
+            "-DSDCB_MEMORY64=OFF",
+            "-DSDCB_MAXIMUM_MEMORY=4294967296",
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "7b4aceab78d95795ede233c23c79f0e255e5faec6010946b9eca7bafd9c19ffe",
+            "inventorySha256": "d1ae2ca50df40734cf4100939eb04148e4a26c154c984dc4b2fed94513b9b5f9",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -470,7 +592,7 @@
               {
                 "file": "0003-webgpu-unknown-memory-capacity.patch",
                 "target": "ggml",
-                "reason": "Do not misreport maxBufferSize as total/free GPU memory. Scoped to the image runtime; its bridge requires a positive budget.",
+                "reason": "Do not misreport maxBufferSize as total/free GPU memory. Image callers must supply an explicit budget when live capacity is unknown.",
                 "files": [
                   {
                     "path": "ggml/src/ggml-webgpu/ggml-webgpu.cpp",
@@ -479,20 +601,372 @@
                   }
                 ],
                 "sha256": "17a689662da25a462a70542fcf096c14315b8824e0f6efdf8c17c10e9a1cca94"
+              },
+              {
+                "file": "0004-browser-gguf-64bit-file-offsets.patch",
+                "target": "stable-diffusion",
+                "reason": "Read unsplit GGUF metadata without whole-file size_t accumulation; preserve 64-bit file positions, validate metadata and leave tensor payloads lazy.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "3b36d1ef883f196b5e6847ec817fd20a7146301ee6bd3a86920e86fa72715586",
+                    "afterSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a"
+                  },
+                  {
+                    "path": "src/model_io/gguf_io.cpp",
+                    "beforeSha256": "976065ada0e5ab3b3d7d7581e1e853ea2f5653d0226a8e38d85ee80d35f09d55",
+                    "afterSha256": "5735b65ddf5d79c2dee028f6987aaa7c346bcb565bc279274d29137fb9ee01a9"
+                  },
+                  {
+                    "path": "src/model_io/tensor_storage.h",
+                    "beforeSha256": "fb37fe9c75080e6ec9989fe178ff6c47c2e7238f85bb70d12bd7c8c472327d44",
+                    "afterSha256": "f789aef10b7cbb320bc730132643bf9e31d47c8defcbe3382ed73f613a584690"
+                  }
+                ],
+                "sha256": "d70f53c5fcb7eb305a6e7912fcb7b03c35dafaff10cda24691d8f992543277c0"
+              },
+              {
+                "file": "0005-browser-gguf-logical-cursor.patch",
+                "target": "stable-diffusion",
+                "reason": "Keep a 64-bit logical metadata cursor; avoid tellg buffer invalidation and repeated FileReaderSync reads while retaining bounded skips and file checks.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a",
+                    "afterSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0"
+                  }
+                ],
+                "sha256": "ce64c95fb7edcae2603e108a4fb0f35e0f32d3a3d5121828b38394d0e66b1780"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790253418,
+          "builtAtUnix": 1790264847,
           "buildCache": {
-            "identity": "2982608215c347c1af9f984a178f65951ff7a6166d49530aa2ec603b8c497a5e",
+            "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
           },
           "validation": {
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, WORKERFS, invalid input and callbacks; no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB; no model/GPU inference"
+          }
+        }
+      }
+    },
+    "webgpu-wasm64-jspi": {
+      "variants": {
+        "browser": {
+          "runtime": "stable-diffusion-cpp",
+          "profile": "webgpu-wasm64-jspi",
+          "variant": "browser",
+          "sourceCommit": "1a354989ff799210eaf3b14c26970ada4cf3cbfc",
+          "sourceDirty": false,
+          "sourceStatusBeforeBuild": [],
+          "sourceStatusAfterBuild": [],
+          "upstreams": {
+            "stable-diffusion": {
+              "path": "vendor/stable-diffusion.cpp",
+              "repository": "leejet/stable-diffusion.cpp",
+              "commit": "88411ef1e0688ff2df1010aeeb5d92b2d8cea2be"
+            },
+            "ggml": {
+              "path": "vendor/ggml-webgpu-source",
+              "repository": "ggml-org/llama.cpp",
+              "commit": "3057bb66c86c46d5781e50e85462a760ba7d1feb",
+              "sourceSubdirectory": "ggml"
+            }
+          },
+          "configuration": {
+            "memory64": true,
+            "webgpu": true,
+            "jspi": true,
+            "asyncify": false,
+            "pthreads": false,
+            "maximumMemory": 17179869184
+          },
+          "variantConfiguration": {
+            "assertions": 0,
+            "environment": "web,worker"
+          },
+          "toolchain": {
+            "emsdkVersion": "6.0.9",
+            "emscriptenRelease": "f04ea239d533260dd1db760dd2d668d5f9a88d6b",
+            "emscriptenAsyncifyBigIntPatch": {
+              "sourceSha256": "b32ed147daafc5406faf23d1dee1410c2ae2b78b6b68f0e1b0c425f812970e1b",
+              "patchedSha256": "5722ee92c126e28d71595e3524ee1ba411fd90bc5a5ad55010f57df690de66d5"
+            },
+            "nodeVersion": "22.16.0",
+            "dawnTag": "v20260908.214631",
+            "dawnSha256": "9c36eb46ada070b9cc0de2bdfd04c1fa1a1fd852cc1ebb371e96e68e1efe6c3c"
+          },
+          "emccVersion": "emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 6.0.9 (4e4223852a0835923411059a3929907d7df1232e)",
+          "cmakeCommand": [
+            "emcmake",
+            "cmake",
+            "-S",
+            "/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp",
+            "-B",
+            "/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp/build/webgpu-wasm64-jspi/browser",
+            "-G",
+            "Ninja",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DSDCB_VARIANT=browser",
+            "-DSDCB_SOURCE=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp/build/webgpu-wasm64-jspi/browser/prepared/stable-diffusion",
+            "-DSDCB_GGML_SOURCE=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp/build/webgpu-wasm64-jspi/browser/prepared/ggml/ggml",
+            "-DSDCB_JSPI=ON",
+            "-DSDCB_MEMORY64=ON",
+            "-DSDCB_MAXIMUM_MEMORY=17179869184",
+            "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
+          ],
+          "patches": {
+            "inventorySha256": "d1ae2ca50df40734cf4100939eb04148e4a26c154c984dc4b2fed94513b9b5f9",
+            "patches": [
+              {
+                "file": "0001-single-thread-model-reader.patch",
+                "target": "stable-diffusion",
+                "reason": "Execute the model-reader closure inline for single-threaded Emscripten, preserving native/pthread behavior.",
+                "files": [
+                  {
+                    "path": "src/model_loader.cpp",
+                    "beforeSha256": "0648fbd54c0df589e1998c51f63218953a975621002fbd791e14f8f8adc1abf2",
+                    "afterSha256": "eb8db6b06769bffbcf15f16dc7d0e449694a7645a66f945dfdc0e7c67440af8d"
+                  }
+                ],
+                "sha256": "f89c5c8fdd731f71eb2421e737a2805c945dd742f3ebfb4bef43e527918e26ea"
+              },
+              {
+                "file": "0002-webgpu-group-normalization.patch",
+                "target": "stable-diffusion",
+                "reason": "Lower the two group-normalization entry points to existing NORM where equivalent, with CPU reference tests.",
+                "files": [
+                  {
+                    "path": "src/core/ggml_extend.cpp",
+                    "beforeSha256": "977e8f21083ac57aafe7e8438f8adaaf040ec0f125f6ca187609e01c3b39a8e2",
+                    "afterSha256": "6c5b78a3ca84f5818e6c84f1970e18ee954e812d47211cd7a82e5271ae1ad783"
+                  }
+                ],
+                "sha256": "50a50ca43d962a5755add756c2a96c060d77ce05eff0e17922f83d92dc4a3b19"
+              },
+              {
+                "file": "0003-webgpu-unknown-memory-capacity.patch",
+                "target": "ggml",
+                "reason": "Do not misreport maxBufferSize as total/free GPU memory. Image callers must supply an explicit budget when live capacity is unknown.",
+                "files": [
+                  {
+                    "path": "ggml/src/ggml-webgpu/ggml-webgpu.cpp",
+                    "beforeSha256": "30c099a6af5168b4a5ebabbe22a27838b9fd373bd008e70a73493ff60903537e",
+                    "afterSha256": "661ac0197d0057d15c8ab39a63e5e79d98b6974c167f9f01deac978b7c29cd7a"
+                  }
+                ],
+                "sha256": "17a689662da25a462a70542fcf096c14315b8824e0f6efdf8c17c10e9a1cca94"
+              },
+              {
+                "file": "0004-browser-gguf-64bit-file-offsets.patch",
+                "target": "stable-diffusion",
+                "reason": "Read unsplit GGUF metadata without whole-file size_t accumulation; preserve 64-bit file positions, validate metadata and leave tensor payloads lazy.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "3b36d1ef883f196b5e6847ec817fd20a7146301ee6bd3a86920e86fa72715586",
+                    "afterSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a"
+                  },
+                  {
+                    "path": "src/model_io/gguf_io.cpp",
+                    "beforeSha256": "976065ada0e5ab3b3d7d7581e1e853ea2f5653d0226a8e38d85ee80d35f09d55",
+                    "afterSha256": "5735b65ddf5d79c2dee028f6987aaa7c346bcb565bc279274d29137fb9ee01a9"
+                  },
+                  {
+                    "path": "src/model_io/tensor_storage.h",
+                    "beforeSha256": "fb37fe9c75080e6ec9989fe178ff6c47c2e7238f85bb70d12bd7c8c472327d44",
+                    "afterSha256": "f789aef10b7cbb320bc730132643bf9e31d47c8defcbe3382ed73f613a584690"
+                  }
+                ],
+                "sha256": "d70f53c5fcb7eb305a6e7912fcb7b03c35dafaff10cda24691d8f992543277c0"
+              },
+              {
+                "file": "0005-browser-gguf-logical-cursor.patch",
+                "target": "stable-diffusion",
+                "reason": "Keep a 64-bit logical metadata cursor; avoid tellg buffer invalidation and repeated FileReaderSync reads while retaining bounded skips and file checks.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a",
+                    "afterSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0"
+                  }
+                ],
+                "sha256": "ce64c95fb7edcae2603e108a4fb0f35e0f32d3a3d5121828b38394d0e66b1780"
+              }
+            ],
+            "vendorCheckoutModified": false
+          },
+          "builtAtUnix": 1790264884,
+          "buildCache": {
+            "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
+            "compilerWrapper": "ccache"
+          },
+          "validation": {
+            "compiled": true,
+            "browserSmoke": true,
+            "realModelInference": false,
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB; no model/GPU inference"
+          }
+        },
+        "test": {
+          "runtime": "stable-diffusion-cpp",
+          "profile": "webgpu-wasm64-jspi",
+          "variant": "test",
+          "sourceCommit": "1a354989ff799210eaf3b14c26970ada4cf3cbfc",
+          "sourceDirty": false,
+          "sourceStatusBeforeBuild": [],
+          "sourceStatusAfterBuild": [],
+          "upstreams": {
+            "stable-diffusion": {
+              "path": "vendor/stable-diffusion.cpp",
+              "repository": "leejet/stable-diffusion.cpp",
+              "commit": "88411ef1e0688ff2df1010aeeb5d92b2d8cea2be"
+            },
+            "ggml": {
+              "path": "vendor/ggml-webgpu-source",
+              "repository": "ggml-org/llama.cpp",
+              "commit": "3057bb66c86c46d5781e50e85462a760ba7d1feb",
+              "sourceSubdirectory": "ggml"
+            }
+          },
+          "configuration": {
+            "memory64": true,
+            "webgpu": true,
+            "jspi": true,
+            "asyncify": false,
+            "pthreads": false,
+            "maximumMemory": 17179869184
+          },
+          "variantConfiguration": {
+            "assertions": 1,
+            "environment": "web,worker,node"
+          },
+          "toolchain": {
+            "emsdkVersion": "6.0.9",
+            "emscriptenRelease": "f04ea239d533260dd1db760dd2d668d5f9a88d6b",
+            "emscriptenAsyncifyBigIntPatch": {
+              "sourceSha256": "b32ed147daafc5406faf23d1dee1410c2ae2b78b6b68f0e1b0c425f812970e1b",
+              "patchedSha256": "5722ee92c126e28d71595e3524ee1ba411fd90bc5a5ad55010f57df690de66d5"
+            },
+            "nodeVersion": "22.16.0",
+            "dawnTag": "v20260908.214631",
+            "dawnSha256": "9c36eb46ada070b9cc0de2bdfd04c1fa1a1fd852cc1ebb371e96e68e1efe6c3c"
+          },
+          "emccVersion": "emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 6.0.9 (4e4223852a0835923411059a3929907d7df1232e)",
+          "cmakeCommand": [
+            "emcmake",
+            "cmake",
+            "-S",
+            "/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp",
+            "-B",
+            "/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp/build/webgpu-wasm64-jspi/test",
+            "-G",
+            "Ninja",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DSDCB_VARIANT=test",
+            "-DSDCB_SOURCE=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp/build/webgpu-wasm64-jspi/test/prepared/stable-diffusion",
+            "-DSDCB_GGML_SOURCE=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/stable-diffusion-cpp/build/webgpu-wasm64-jspi/test/prepared/ggml/ggml",
+            "-DSDCB_JSPI=ON",
+            "-DSDCB_MEMORY64=ON",
+            "-DSDCB_MAXIMUM_MEMORY=17179869184",
+            "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
+          ],
+          "patches": {
+            "inventorySha256": "d1ae2ca50df40734cf4100939eb04148e4a26c154c984dc4b2fed94513b9b5f9",
+            "patches": [
+              {
+                "file": "0001-single-thread-model-reader.patch",
+                "target": "stable-diffusion",
+                "reason": "Execute the model-reader closure inline for single-threaded Emscripten, preserving native/pthread behavior.",
+                "files": [
+                  {
+                    "path": "src/model_loader.cpp",
+                    "beforeSha256": "0648fbd54c0df589e1998c51f63218953a975621002fbd791e14f8f8adc1abf2",
+                    "afterSha256": "eb8db6b06769bffbcf15f16dc7d0e449694a7645a66f945dfdc0e7c67440af8d"
+                  }
+                ],
+                "sha256": "f89c5c8fdd731f71eb2421e737a2805c945dd742f3ebfb4bef43e527918e26ea"
+              },
+              {
+                "file": "0002-webgpu-group-normalization.patch",
+                "target": "stable-diffusion",
+                "reason": "Lower the two group-normalization entry points to existing NORM where equivalent, with CPU reference tests.",
+                "files": [
+                  {
+                    "path": "src/core/ggml_extend.cpp",
+                    "beforeSha256": "977e8f21083ac57aafe7e8438f8adaaf040ec0f125f6ca187609e01c3b39a8e2",
+                    "afterSha256": "6c5b78a3ca84f5818e6c84f1970e18ee954e812d47211cd7a82e5271ae1ad783"
+                  }
+                ],
+                "sha256": "50a50ca43d962a5755add756c2a96c060d77ce05eff0e17922f83d92dc4a3b19"
+              },
+              {
+                "file": "0003-webgpu-unknown-memory-capacity.patch",
+                "target": "ggml",
+                "reason": "Do not misreport maxBufferSize as total/free GPU memory. Image callers must supply an explicit budget when live capacity is unknown.",
+                "files": [
+                  {
+                    "path": "ggml/src/ggml-webgpu/ggml-webgpu.cpp",
+                    "beforeSha256": "30c099a6af5168b4a5ebabbe22a27838b9fd373bd008e70a73493ff60903537e",
+                    "afterSha256": "661ac0197d0057d15c8ab39a63e5e79d98b6974c167f9f01deac978b7c29cd7a"
+                  }
+                ],
+                "sha256": "17a689662da25a462a70542fcf096c14315b8824e0f6efdf8c17c10e9a1cca94"
+              },
+              {
+                "file": "0004-browser-gguf-64bit-file-offsets.patch",
+                "target": "stable-diffusion",
+                "reason": "Read unsplit GGUF metadata without whole-file size_t accumulation; preserve 64-bit file positions, validate metadata and leave tensor payloads lazy.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "3b36d1ef883f196b5e6847ec817fd20a7146301ee6bd3a86920e86fa72715586",
+                    "afterSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a"
+                  },
+                  {
+                    "path": "src/model_io/gguf_io.cpp",
+                    "beforeSha256": "976065ada0e5ab3b3d7d7581e1e853ea2f5653d0226a8e38d85ee80d35f09d55",
+                    "afterSha256": "5735b65ddf5d79c2dee028f6987aaa7c346bcb565bc279274d29137fb9ee01a9"
+                  },
+                  {
+                    "path": "src/model_io/tensor_storage.h",
+                    "beforeSha256": "fb37fe9c75080e6ec9989fe178ff6c47c2e7238f85bb70d12bd7c8c472327d44",
+                    "afterSha256": "f789aef10b7cbb320bc730132643bf9e31d47c8defcbe3382ed73f613a584690"
+                  }
+                ],
+                "sha256": "d70f53c5fcb7eb305a6e7912fcb7b03c35dafaff10cda24691d8f992543277c0"
+              },
+              {
+                "file": "0005-browser-gguf-logical-cursor.patch",
+                "target": "stable-diffusion",
+                "reason": "Keep a 64-bit logical metadata cursor; avoid tellg buffer invalidation and repeated FileReaderSync reads while retaining bounded skips and file checks.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a",
+                    "afterSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0"
+                  }
+                ],
+                "sha256": "ce64c95fb7edcae2603e108a4fb0f35e0f32d3a3d5121828b38394d0e66b1780"
+              }
+            ],
+            "vendorCheckoutModified": false
+          },
+          "builtAtUnix": 1790264870,
+          "buildCache": {
+            "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
+            "compilerWrapper": "ccache"
+          },
+          "validation": {
+            "compiled": true,
+            "browserSmoke": true,
+            "realModelInference": false,
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB; no model/GPU inference"
           }
         }
       }
@@ -507,8 +981,48 @@
     },
     {
       "path": "README.md",
-      "bytes": 4045,
-      "sha256": "3c78bdc5111ff0678892c2e8fe9fb62f603cfc160eaee1d875c808bddbe8d927"
+      "bytes": 5915,
+      "sha256": "d81ad7f4088bcb05bce157f1d9f56bbd715d65e827eca0a138c53f8450726e6b"
+    },
+    {
+      "path": "api/functions.d.ts",
+      "bytes": 4223,
+      "sha256": "1388478645e30c2ebabca1a5a01042ad327a35d943324d9e273d28d4f6b85164"
+    },
+    {
+      "path": "api/schema.json",
+      "bytes": 58004,
+      "sha256": "6b733b706f0110c79844ec106c4393868fd5ac97ee3033b23084f17c8d52293d"
+    },
+    {
+      "path": "api/schema.mjs",
+      "bytes": 33407,
+      "sha256": "8dc1b9f901dd4639657361ba4cbda07a5f311e8883edf9266ad01997a6028d6e"
+    },
+    {
+      "path": "examples/runtime/README.md",
+      "bytes": 3185,
+      "sha256": "5bb6e11c1e7a49f15f896b76f7590d3d241c024d105cec4d0403629b4f83cc4c"
+    },
+    {
+      "path": "examples/runtime/bindings.mjs",
+      "bytes": 8808,
+      "sha256": "0889e9d751ba32f60e15f22255af2d43f53e536a3ab22eedffbf98dc78dcbd1d"
+    },
+    {
+      "path": "examples/runtime/index.d.ts",
+      "bytes": 1580,
+      "sha256": "185fc6331c1ed38aba649f91bce67dfa8d69c01442f8e48984353a07204d14f3"
+    },
+    {
+      "path": "examples/runtime/index.mjs",
+      "bytes": 257,
+      "sha256": "95f98a546ae3cd83b96e319c1ce347706f0db47e0297f713afc2d5d1d3f2888a"
+    },
+    {
+      "path": "examples/runtime/read-only-file.mjs",
+      "bytes": 3627,
+      "sha256": "c3d583c770bbdcc2d7e33601c1d6089747781f68b649a1cb4ec34b72fc351f6b"
     },
     {
       "path": "licenses/embedded/json.hpp.txt",
@@ -897,68 +1411,98 @@
     },
     {
       "path": "package.json",
-      "bytes": 332,
-      "sha256": "f917907dd4aefe878b8b97f162fed0f630e2010b7194f2adab74e7bad1d7cfc8"
+      "bytes": 517,
+      "sha256": "83871be037311bb1c62a1f9f15b716f5124f283aaa3e112cedb74b6f909a424a"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/browser/core.d.ts",
-      "bytes": 1345,
-      "sha256": "c7b962d5dd1a378c38a2a811fc9c13eb80ded6324b821a4a4461b6856ecf8ac9"
+      "bytes": 1284,
+      "sha256": "6faa78a95b9fa66c5b13ca354ce335d9be5734dd5211da4d3625d63ca8da2e88"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/browser/core.mjs",
-      "bytes": 186447,
-      "sha256": "d986c753ed0262dbe6cfcdd0538a29edb7f852136a01b8948b632c68e9ea8e0d"
+      "bytes": 197552,
+      "sha256": "e4bbf0a084bbd50023df0b061cd9821e41fd728384f1448a339178cbf55879e8"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/browser/core.wasm",
-      "bytes": 42883971,
-      "sha256": "fed530f9846db7bab862c057ca6b5dcf2903706ff25652418c5c38ad23efbfea"
+      "bytes": 43526913,
+      "sha256": "e8693666c1d249c91481b9e0dbfe2e9019544a42a4a2c3c04089d7fb16da2e45"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/test/core.d.ts",
-      "bytes": 1345,
-      "sha256": "c7b962d5dd1a378c38a2a811fc9c13eb80ded6324b821a4a4461b6856ecf8ac9"
+      "bytes": 1284,
+      "sha256": "6faa78a95b9fa66c5b13ca354ce335d9be5734dd5211da4d3625d63ca8da2e88"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/test/core.mjs",
-      "bytes": 279344,
-      "sha256": "969b2b5bb8c6cf9b5c1242a2969541224e372f8fef2b0dba2acbe19e0860a855"
+      "bytes": 325009,
+      "sha256": "55497486a2715de4ee9d6d924d335281e6b80069f981a6cfd9d75c5c0ce08b42"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/test/core.wasm",
-      "bytes": 43116612,
-      "sha256": "7fd31a9ef71dc6849c5b5de3cd347866722b7ac075fe1d81092c1ff48c8212fd"
+      "bytes": 43763596,
+      "sha256": "e14ee2a78a9b7a1dc864abd1a547bbae357de358c4f22d7fb2d67ff21a1c5970"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/browser/core.d.ts",
-      "bytes": 1345,
-      "sha256": "c7b962d5dd1a378c38a2a811fc9c13eb80ded6324b821a4a4461b6856ecf8ac9"
+      "bytes": 1284,
+      "sha256": "6faa78a95b9fa66c5b13ca354ce335d9be5734dd5211da4d3625d63ca8da2e88"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/browser/core.mjs",
-      "bytes": 117709,
-      "sha256": "335abaf72782b21de26f08b14351493b41ee01e412850669fe5fc6e665619500"
+      "bytes": 132758,
+      "sha256": "8f192cb36f6adf64a6baad30848d667fc6aaa103a9792a4341d8741498d361ff"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/browser/core.wasm",
-      "bytes": 37378083,
-      "sha256": "b86703d12a5e597a5fdc0032628fab0f5f87e36b339409ab46df7206d1d4341f"
+      "bytes": 37723664,
+      "sha256": "f4f38006b3a10f0f81d0820f32a773e8adfe40f7b26c788f243ade8c959fe4b2"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/test/core.d.ts",
-      "bytes": 1345,
-      "sha256": "c7b962d5dd1a378c38a2a811fc9c13eb80ded6324b821a4a4461b6856ecf8ac9"
+      "bytes": 1284,
+      "sha256": "6faa78a95b9fa66c5b13ca354ce335d9be5734dd5211da4d3625d63ca8da2e88"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/test/core.mjs",
-      "bytes": 162431,
-      "sha256": "e888bb9647cc16ac17f1bc53b06e03b13e20a37366e0e97ba7c95e5aab00a1bb"
+      "bytes": 208997,
+      "sha256": "7cd083ed27c5e625b580508c818261900e64aa4132f6aee82b2924584a0d1ff5"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/test/core.wasm",
-      "bytes": 37552455,
-      "sha256": "e64e6416e99ad1589719bb2616d0f980edee5b9d2064559758e9f9947d032612"
+      "bytes": 37903199,
+      "sha256": "505794536f61fa1fc616c326ad543aa4e9df114efda418a7581daeb6af6331e3"
+    },
+    {
+      "path": "profiles/webgpu-wasm64-jspi/browser/core.d.ts",
+      "bytes": 1284,
+      "sha256": "6faa78a95b9fa66c5b13ca354ce335d9be5734dd5211da4d3625d63ca8da2e88"
+    },
+    {
+      "path": "profiles/webgpu-wasm64-jspi/browser/core.mjs",
+      "bytes": 135558,
+      "sha256": "2ba3a34bb5a05769680fe0ad7129f240ce19b817f8735aeb44ea8a0f02afd0cb"
+    },
+    {
+      "path": "profiles/webgpu-wasm64-jspi/browser/core.wasm",
+      "bytes": 38036273,
+      "sha256": "9721460ea4cce97f05cec8fb2f7ffd71cbbfd67b6bdf1048349f83a3b9491b6d"
+    },
+    {
+      "path": "profiles/webgpu-wasm64-jspi/test/core.d.ts",
+      "bytes": 1284,
+      "sha256": "6faa78a95b9fa66c5b13ca354ce335d9be5734dd5211da4d3625d63ca8da2e88"
+    },
+    {
+      "path": "profiles/webgpu-wasm64-jspi/test/core.mjs",
+      "bytes": 212495,
+      "sha256": "bf33718dce5e42731c8a1c5524e4f6b5d17e4d0144973eb51d7eab4bd71997aa"
+    },
+    {
+      "path": "profiles/webgpu-wasm64-jspi/test/core.wasm",
+      "bytes": 38225694,
+      "sha256": "c169c22253db64108c71eeb45b28f323e69b82e89a791303b50a9314b69fb4da"
     }
   ]
 }

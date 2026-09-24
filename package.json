@@ -12,6 +12,10 @@
     "LICENSE"
   ],
   "exports": {
+    "./stable-diffusion-cpp/examples/runtime": {
+      "types": "./stable-diffusion-cpp/examples/runtime/index.d.ts",
+      "import": "./stable-diffusion-cpp/examples/runtime/index.mjs"
+    },
     "./llama-cpp/*": "./llama-cpp/*",
     "./stable-diffusion-cpp/*": "./stable-diffusion-cpp/*",
     "./manifest.json": "./manifest.json",
