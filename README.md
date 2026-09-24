@@ -1,4 +1,4 @@
-# Browser inference core monorepo
+# Browser Inference Core
 
 One source repository, independent browser runtimes, one append-only `artifacts`
 branch. Existing llama.cpp source has moved to `llama-cpp/`. Image generation is
@@ -9,11 +9,15 @@ model pipeline. Both have their own profile definitions and upstream pins.
 llama-cpp/                  # existing bridge, config, scripts, tests, upstream
 stable-diffusion-cpp/        # new bridge, config, scripts, tests, upstreams
   upstream-patches/         # explicit user-authorized browser experiment
-scripts/                    # multi-runtime assembly, publication, reporting
+toolchain/config.json       # common pinned browser compiler and Dawn
+scripts/                    # common setup, caches, assembly, publication, reporting
 .github/workflows/          # source-bound builds and privileged report boundary
 ```
 
 ## Migration
+
+The submodule-move instructions below apply only to the initial single-runtime
+layout migration. Skip them when the two runtime directories already exist.
 
 Before applying a patch that moves the llama submodule, start from a clean source
 checkout. `git submodule deinit -- vendor/llama.cpp` safely refuses a dirty
@@ -23,10 +27,49 @@ The old submodule name is retained in `.gitmodules` so its cached Git objects ca
 be reused at the new path. Commit all staged changes before building publishable
 artifacts. ZIP source snapshots contain no submodule data.
 
-Run legacy commands from `llama-cpp/`; root `npm test` forwards the Node tests.
-Root `npm run test:python` runs all three Python test suites. Toolchain bootstrap
-currently remains in `llama-cpp/scripts/setup_toolchain.py`; its pinned compiler
-and Dawn are reused by the image build, not independently upgraded.
+The current project name is **Browser Inference Core** (`browser-inference-core`).
+This is a provisional name, not an instruction to rename a GitHub repository.
+The installable package name stays `llama-cpp-browser-core` for existing imports;
+publication URLs and install commands use the actual `GITHUB_REPOSITORY` value.
+
+Run runtime-specific commands from their own directories. Root `npm test` runs
+both Node test suites; `npm run test:python` runs all three Python suites.
+Bootstrap the shared compiler from the repository root:
+
+```sh
+python3 scripts/setup_toolchain.py
+source .tools/emsdk/emsdk_env.sh
+```
+
+Compiler, Dawn and the already-approved Asyncify correction are pinned in
+`toolchain/config.json`. The llama pin stays in
+`llama-cpp/config/toolchain.json`; image pins stay in
+`stable-diffusion-cpp/config/upstreams.json`. Their versions are not coupled.
+Old ignored `llama-cpp/.tools/` contents are no longer read; do not copy them into
+the new shared installation. No submodule relocation is needed for this change.
+
+## Parallel builds and bounded caches
+
+```text
+host tests ──────────────────┐
+llama compile (10 pairs) ────┴─ llama package + browser checks ──┐
+                                                              ├─ aggregate + publish
+image compile (4 pairs) ─────┬─ image package + browser checks ─┘
+image native checks ────────┘
+```
+
+Only final aggregation waits for both runtimes. Each side transfers its own
+compiler/Dawn license notices and never borrows the other's build artifact.
+Runner availability can still limit actual parallelism.
+
+CI caches the SHA-256-verified Dawn download, Emscripten's system-library cache,
+and strictly partitioned ccache objects. It always verifies the pinned toolchain,
+configures a fresh build tree and links the current runtime. It never restores
+finished runtime artifacts as a shortcut to a successful build. Cache saving is
+restricted to successful default-branch push builds; PR and other branch builds
+only restore through these configured actions. See
+[the cache and toolchain contract](toolchain/README.md) for trust limits,
+invalidation, and the cold-cache path.
 
 ## Runtime package layout (manifest format 3)
 

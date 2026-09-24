@@ -165,7 +165,7 @@ def main():
     a=p.parse_args()
     if not a.verify_only:
         profiles=a.profiles or list(json.loads((ROOT/'config/profiles.json').read_text()))
-        roots=a.license_root or [ROOT/'vendor/llama.cpp',ROOT/'.tools/emsdk/upstream/emscripten',ROOT/'.tools/emdawnwebgpu_pkg']
+        roots=a.license_root or [ROOT/'vendor/llama.cpp',ROOT.parent/'.tools/emsdk/upstream/emscripten',ROOT.parent/'.tools/emdawnwebgpu_pkg']
         build_package(a.build_root,a.output,profiles,license_roots=roots)
     print(json.dumps(validate(a.output,require_clean=a.verify_only),indent=2))
 if __name__=='__main__': main()

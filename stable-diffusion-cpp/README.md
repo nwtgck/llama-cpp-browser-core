@@ -13,17 +13,22 @@ is not a claim that Qwen Image or every upstream architecture fits a browser.
 From repository root initialize submodules recursively. Then:
 
 ```sh
-python3 llama-cpp/scripts/setup_toolchain.py
-. llama-cpp/.tools/emsdk/emsdk_env.sh
+python3 scripts/setup_toolchain.py
+. .tools/emsdk/emsdk_env.sh
 python3 stable-diffusion-cpp/scripts/build.py --profile webgpu-wasm32-jspi --variant browser
 ```
 
-Every profile/variant pair has its own build tree. The compiler/Dawn pins are
-currently shared with `llama-cpp/config/toolchain.json`; the image upstreams are
+Every profile/variant pair has its own build tree. Shared compiler/Dawn pins
+are in repository-root `toolchain/config.json`; the image upstreams are
 independently pinned in `config/upstreams.json`. `vendor/ggml-webgpu-source` is a
 llama.cpp checkout used solely for its `ggml/` subtree. Updating llama-cpp's
 upstream does not silently change the image backend. `upstream-patches` has the
 explicit user-approved experimental exception and the complete patch inventory.
+
+The image build and packaging jobs do not depend on llama's jobs. One image
+compile shard supplies both compiler and Dawn notices. The ggml code uses the
+parent checkout's `LICENSE`, plus any notices inside `ggml/`; unrelated llama
+application notices are not collected. See [shared cache policy](../toolchain/README.md).
 
 ## ABI 1
 
@@ -35,6 +40,14 @@ return means read `sdb_error`. Image output is RGB8 and borrowed until
 callbacks must not call into the core. A dedicated Worker per operation provides
 hard cancellation without re-entering suspended Wasm; terminate it after copying
 the result or on cancellation/error. The core performs no model downloads.
+
+Callbacks are application hooks, not Emscripten `INCOMING_MODULE_JS_API` settings.
+Pass `onProgress`/`onLog` to the factory as before, or replace both listeners with
+`core.setCallbacks({onProgress, onLog})` after initialization. Use
+`core.setCallbacks({})` to clear them. The pre-JavaScript adapter owns listeners
+per module instance and catches listener exceptions; listeners must still never
+re-enter a core operation. Test builds alone export `_sdb_test_callbacks` to
+check Wasm-to-JavaScript delivery; this emits synthetic values, not model output.
 
 Load JSON fields: `model` OR `diffusion`, optional `vae`, `clipL`, `clipG`, `t5`,
 `llm`, and required `gpuBudgetMiB` (512..16384). Paths are under `/models/`.
@@ -52,5 +65,8 @@ support is claimed by this image experiment.
 Native tests exercise the actual bridge's rejection paths and compare the
 patched normalization entry point against upstream CPU GROUP_NORM. CI compilation
 and module-boundary browser smoke tests do not certify real-model inference.
+The browser smoke runs each of the four variants in a module Worker, reads a
+Blob through WORKERFS, exercises invalid-input diagnostics and callback delivery,
+and terminates the Worker. It does not request a GPU device or load a model.
 `validation.realModelInference` remains false until a genuine model run is
 recorded. Never replace it with a synthetic success flag.

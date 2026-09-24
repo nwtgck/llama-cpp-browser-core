@@ -58,7 +58,7 @@ jobs:
           cmake --build build/mtmd-bf16-tests --target mtmd-bf16-test --parallel 2
           build/mtmd-bf16-tests/mtmd-bf16-test
   compile:
-    name: Build ${{ matrix.profile }} / ${{ matrix.variant }}
+    name: Build llama.cpp ${{ matrix.profile }} / ${{ matrix.variant }}
     if: >-
       (github.event_name == 'pull_request' && github.head_ref != 'artifacts' && !startsWith(github.head_ref, 'artifacts/')) ||
       (github.event_name != 'pull_request' && github.ref_type == 'branch' && github.ref_name != 'artifacts' && !startsWith(github.ref_name, 'artifacts/'))
@@ -88,17 +88,22 @@ jobs:
         with:
           node-version: '22.16.0'
       - name: Install build prerequisites
-        run: sudo apt-get update && sudo apt-get install -y ninja-build clang cmake
-      - name: Install pinned toolchain
-        run: python3 scripts/setup_toolchain.py
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang cmake ccache
+      - name: Prepare shared toolchain and isolated caches
+        id: cache
+        uses: ./.github/actions/restore-browser-cache
+        with:
+          runtime: llama-cpp
+          profile: ${{ matrix.profile }}
+          variant: ${{ matrix.variant }}
       - name: Build profile
         shell: bash
         env:
           PROFILE: ${{ matrix.profile }}
           VARIANT: ${{ matrix.variant }}
         run: |
-          source .tools/emsdk/emsdk_env.sh
-          python3 scripts/build.py --profile "$PROFILE" --variant "$VARIANT"
+          source ../.tools/emsdk/emsdk_env.sh
+          python3 scripts/build.py --fresh --profile "$PROFILE" --variant "$VARIANT"
       - name: Stage package inputs
         shell: bash
         env:
@@ -119,6 +124,25 @@ jobs:
           include-hidden-files: true
           compression-level: 1
           retention-days: 14
+      - name: Compiler cache statistics
+        if: always() && steps.cache.outcome == 'success'
+        run: ccache --show-stats
+      - name: Save reusable intermediates (trusted default-branch pushes only)
+        if: >-
+          success() && github.event_name == 'push' &&
+          github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+          github.actor != 'dependabot[bot]'
+        uses: ./.github/actions/save-browser-cache
+        with:
+          dawn-key: ${{ steps.cache.outputs.dawn-key }}
+          dawn-path: ${{ steps.cache.outputs.dawn-path }}
+          dawn-hit: ${{ steps.cache.outputs.dawn-hit }}
+          em-key: ${{ steps.cache.outputs.em-key }}
+          em-path: ${{ steps.cache.outputs.em-path }}
+          em-hit: ${{ steps.cache.outputs.em-hit }}
+          cc-key: ${{ steps.cache.outputs.cc-key }}
+          cc-path: ${{ steps.cache.outputs.cc-path }}
+          cc-hit: ${{ steps.cache.outputs.cc-hit }}
       - name: Report source changes after a failure
         if: failure()
         run: |
@@ -127,6 +151,7 @@ jobs:
           git diff --cached --stat
           git submodule foreach --recursive 'git status --short --untracked-files=all --ignore-submodules=none'
   build:
+    name: Package and validate llama.cpp
     needs: [test, compile]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -155,8 +180,8 @@ jobs:
         run: node tests/asyncify-rewind.mjs
       - name: Test both variants with real CPU Wasm and GPU suspension in Chromium
         run: |
-          npm install --prefix .tools/browser --no-save --package-lock=false playwright@1.58.2
-          .tools/browser/node_modules/.bin/playwright install --with-deps chromium
+          npm install --prefix ../.tools/browser --no-save --package-lock=false playwright@1.58.2
+          ../.tools/browser/node_modules/.bin/playwright install --with-deps chromium
           python3 scripts/make_test_model.py build/fixture.gguf
           node tests/browser-smoke.mjs dist/package build/fixture.gguf
       - name: Record verified scope and repackage
@@ -182,7 +207,9 @@ jobs:
           git diff --cached --stat
           git submodule foreach --recursive 'git status --short --untracked-files=all --ignore-submodules=none'
   image-native:
-    needs: test
+    if: >-
+      (github.event_name == 'pull_request' && github.head_ref != 'artifacts' && !startsWith(github.head_ref, 'artifacts/')) ||
+      (github.event_name != 'pull_request' && github.ref_type == 'branch' && github.ref_name != 'artifacts' && !startsWith(github.ref_name, 'artifacts/'))
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     defaults:
@@ -195,7 +222,9 @@ jobs:
           submodules: recursive
           persist-credentials: false
       - name: Test exact patch preparation and host code
-        run: python3 -m unittest discover -s tests -p 'test_*.py'
+        run: |
+          python3 -m unittest discover -s tests -p 'test_*.py'
+          node --test tests/*.test.mjs
       - name: Native bridge and actual patched normalization tests
         run: |
           python3 scripts/prepare_upstream.py --output build/native-src
@@ -207,7 +236,9 @@ jobs:
           cmake --build build/native --parallel 2
           ctest --test-dir build/native --output-on-failure
   image-compile:
-    needs: test
+    if: >-
+      (github.event_name == 'pull_request' && github.head_ref != 'artifacts' && !startsWith(github.head_ref, 'artifacts/')) ||
+      (github.event_name != 'pull_request' && github.ref_type == 'branch' && github.ref_name != 'artifacts' && !startsWith(github.ref_name, 'artifacts/'))
     name: Image ${{ matrix.profile }} / ${{ matrix.variant }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -233,26 +264,56 @@ jobs:
         with:
           node-version: '22.16.0'
       - name: Install build prerequisites
-        run: sudo apt-get update && sudo apt-get install -y ninja-build clang cmake
-      - name: Install the same pinned browser toolchain
-        run: python3 ../llama-cpp/scripts/setup_toolchain.py
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang cmake ccache
+      - name: Prepare shared toolchain and isolated caches
+        id: cache
+        uses: ./.github/actions/restore-browser-cache
+        with:
+          runtime: stable-diffusion-cpp
+          profile: ${{ matrix.profile }}
+          variant: ${{ matrix.variant }}
       - name: Build image profile
         env:
           PROFILE: ${{ matrix.profile }}
           VARIANT: ${{ matrix.variant }}
         shell: bash
         run: |
-          source ../llama-cpp/.tools/emsdk/emsdk_env.sh
-          python3 scripts/build.py --profile "$PROFILE" --variant "$VARIANT"
+          source ../.tools/emsdk/emsdk_env.sh
+          extra=()
+          if [[ "$PROFILE" == "webgpu-wasm32-jspi" && "$VARIANT" == "browser" ]]; then
+            extra+=(--include-toolchain-notices)
+          fi
+          python3 scripts/build.py --fresh --profile "$PROFILE" --variant "$VARIANT" "${extra[@]}"
       - uses: actions/upload-artifact@v4
         with:
           name: image-build-${{ matrix.profile }}-${{ matrix.variant }}
           path: stable-diffusion-cpp/build/ci-upload/
           if-no-files-found: error
+          include-hidden-files: true
           compression-level: 1
           retention-days: 14
+      - name: Compiler cache statistics
+        if: always() && steps.cache.outcome == 'success'
+        run: ccache --show-stats
+      - name: Save reusable intermediates (trusted default-branch pushes only)
+        if: >-
+          success() && github.event_name == 'push' &&
+          github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+          github.actor != 'dependabot[bot]'
+        uses: ./.github/actions/save-browser-cache
+        with:
+          dawn-key: ${{ steps.cache.outputs.dawn-key }}
+          dawn-path: ${{ steps.cache.outputs.dawn-path }}
+          dawn-hit: ${{ steps.cache.outputs.dawn-hit }}
+          em-key: ${{ steps.cache.outputs.em-key }}
+          em-path: ${{ steps.cache.outputs.em-path }}
+          em-hit: ${{ steps.cache.outputs.em-hit }}
+          cc-key: ${{ steps.cache.outputs.cc-key }}
+          cc-path: ${{ steps.cache.outputs.cc-path }}
+          cc-hit: ${{ steps.cache.outputs.cc-hit }}
   image-build:
-    needs: [image-native, image-compile, build]
+    name: Package and validate stable-diffusion.cpp
+    needs: [image-native, image-compile]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
@@ -272,23 +333,19 @@ jobs:
           pattern: image-build-*
           path: stable-diffusion-cpp/build/
           merge-multiple: true
-      - uses: actions/download-artifact@v4
-        with:
-          name: profile-build-webgpu-wasm64-jspi-browser
-          path: llama-cpp/build/
       - name: Package image runtime
         run: |
           python3 scripts/package_runtime.py \
-            --license-root ../llama-cpp/build/toolchain-licenses/emscripten \
-            --license-root ../llama-cpp/build/toolchain-licenses/emdawnwebgpu_pkg
+            --license-root build/toolchain-licenses/emscripten \
+            --license-root build/toolchain-licenses/emdawnwebgpu_pkg
       - name: Real Wasm ABI smoke (not image inference)
         run: |
-          npm install --prefix ../llama-cpp/.tools/browser --no-save --package-lock=false playwright@1.58.2
-          ../llama-cpp/.tools/browser/node_modules/.bin/playwright install --with-deps chromium
+          npm install --prefix ../.tools/browser --no-save --package-lock=false playwright@1.58.2
+          ../.tools/browser/node_modules/.bin/playwright install --with-deps chromium
           node tests/browser-smoke.mjs dist/package
           python3 scripts/package_runtime.py \
-            --license-root ../llama-cpp/build/toolchain-licenses/emscripten \
-            --license-root ../llama-cpp/build/toolchain-licenses/emdawnwebgpu_pkg
+            --license-root build/toolchain-licenses/emscripten \
+            --license-root build/toolchain-licenses/emdawnwebgpu_pkg
       - uses: actions/upload-artifact@v4
         with:
           name: image-runtime-package

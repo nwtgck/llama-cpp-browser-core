@@ -41,7 +41,7 @@ class MultiRuntime(unittest.TestCase):
             profiles = {'cpu-wasm32': {}}
         else:
             manifest.update(formatVersion=1, abiVersion=1, runtime=runtime, upstreams={'fixture': 'b' * 40}, experimental=True)
-            for name in ['stable-diffusion/LICENSE', 'ggml/LICENSE', *['embedded/' + p + '.txt' for p in ['json.hpp', 'stb_image.h', 'stb_image_resize.h', 'stb_image_write.h']]]: put('licenses/' + name, 'fixture notice')
+            for name in ['stable-diffusion/LICENSE', 'ggml/LICENSE', 'toolchain/emscripten/LICENSE', 'toolchain/emdawnwebgpu_pkg/LICENSE', *['embedded/' + p + '.txt' for p in ['json.hpp', 'stb_image.h', 'stb_image_resize.h', 'stb_image_write.h']]]: put('licenses/' + name, 'fixture notice')
             profiles = validator.PROFILES
         for profile, config in profiles.items():
             variants = {}
@@ -78,6 +78,7 @@ class MultiRuntime(unittest.TestCase):
         # No network, npm lock generation, or real upstream build is claimed.
         data = reporter.metadata(self.out, 'example/lcore', 'd' * 40, {'specifier': 'github:example/lcore#' + 'd' * 40}, {'baseCommit': 'b' * 40})
         self.assertTrue(data['retrieval']['sourceRawBase'].endswith('/llama-cpp/'))
+        self.assertEqual(data['retrieval']['sourceRawBase'], data['retrieval']['sourceRepositoryRawBase']+'llama-cpp/')
         self.assertEqual(data['runtime']['manifestFormatVersion'], 3)
         self.assertTrue(data['browserProfiles']['cpu-wasm32']['wasm']['path'].startswith('llama-cpp/profiles/'))
         sd = data['stableDiffusion']

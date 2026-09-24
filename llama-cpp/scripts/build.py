@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import sys
 import time
+sys.path.append(str(Path(__file__).resolve().parents[2] / 'scripts'))
+from browser_toolchain import runtime_toolchain
 from patch_emscripten import verify_asyncify_bigint_patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,9 +31,10 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--profile', choices=list(profiles), required=True)
     p.add_argument('--variant', choices=list(variants), required=True)
+    p.add_argument('--fresh', action='store_true', help='Discard this profile/variant build tree before configuration')
     p.add_argument('--jobs',type=int,default=min(os.cpu_count() or 2, 8))
     a=p.parse_args(); cfg=profiles[a.profile]
-    toolchain=json.loads((ROOT/'config/toolchain.json').read_text())
+    toolchain=runtime_toolchain(ROOT)
     src=ROOT/'vendor/llama.cpp'
     if not (src/'include/llama.h').exists(): p.error('Run git submodule update --init --recursive')
     sha=output('git','rev-parse','HEAD',cwd=src)
@@ -51,6 +54,7 @@ def main():
     # Assertions affect linked Wasm as well as JavaScript. Each variant owns a
     # separate build tree; never reuse another variant's generated runtime files.
     build=ROOT/'build'/a.profile/a.variant
+    if a.fresh and build.exists(): shutil.rmtree(build)
     command=['emcmake','cmake','-S',str(ROOT),'-B',str(build),'-G','Ninja',
              '-DCMAKE_BUILD_TYPE=Release', '-DLCB_VARIANT='+a.variant,
              '-DLCB_MEMORY64='+('ON' if cfg['memory64'] else 'OFF'),
@@ -62,8 +66,8 @@ def main():
              '-DLCB_ASYNCIFY='+('ON' if cfg['asyncify'] else 'OFF'),
              '-DLCB_MAXIMUM_MEMORY='+str(cfg['maximumMemory'])]
     if cfg['webgpu']:
-        dawn=ROOT/'.tools/emdawnwebgpu_pkg'
-        if not (dawn/'emdawnwebgpu.port.py').exists(): p.error('Run scripts/setup_toolchain.py to obtain Dawn')
+        dawn=ROOT.parent/'.tools/emdawnwebgpu_pkg'
+        if not (dawn/'emdawnwebgpu.port.py').exists(): p.error('Run ../scripts/setup_toolchain.py to obtain Dawn')
         command.append('-DEMDAWNWEBGPU_DIR='+str(dawn))
     # CMake configure-time probes can write into the process working directory.
     # Keep those incidental outputs in the ignored build tree, not in the source tree.
@@ -81,6 +85,7 @@ def main():
                 'sourceStatusBeforeBuild':status_before,'sourceStatusAfterBuild':status_after,
                 'llamaCommit':sha,'toolchain':toolchain,'emccVersion':version,
                 'cmakeCommand':command,'builtAtUnix':int(time.time()),
+                'buildCache': {'identity': os.environ.get('BIC_CACHE_ID'), 'compilerWrapper': os.environ.get('EM_COMPILER_WRAPPER')},
                 'validation':{'compiled':True,'realModelInference':False,'browserSmoke':False}}
     (build/'provenance.json').write_text(json.dumps(provenance,indent=2)+'\n')
     print(build/'runtime/core.mjs')

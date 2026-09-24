@@ -58,8 +58,8 @@ class WorkflowBoundaries(unittest.TestCase):
         self.assertNotIn('pull-requests: write', self.build)
 
     def test_artifact_branches_do_not_reenter_source_builds(self):
-        self.assertEqual(self.build.count("github.head_ref != 'artifacts'"), 2)
-        self.assertEqual(self.build.count("github.ref_name != 'artifacts'"), 2)
+        self.assertEqual(self.build.count("github.head_ref != 'artifacts'"), 4)
+        self.assertEqual(self.build.count("github.ref_name != 'artifacts'"), 4)
         self.assertEqual(self.build.count('    branches-ignore:'), 2)
 
     def test_lock_resolution_is_after_publication_and_report_is_attempt_bound(self):

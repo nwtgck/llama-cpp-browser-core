@@ -6,6 +6,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from fixture_toolchain import merged_toolchain, seed_toolchain
 from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -20,11 +21,12 @@ class CiBuildArtifacts(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory(prefix='lcb-ci-artifacts-')
         self.addCleanup(self.tmp.cleanup)
-        self.root=Path(self.tmp.name)
+        self.root=Path(self.tmp.name)/'llama-cpp'
+        self.root.mkdir()
         self.build=self.root/'build'
         self.output=self.root/'upload'
         self.source_commit='a'*40
-        self.toolchain=json.loads((ROOT/'config/toolchain.json').read_text())
+        self.toolchain=merged_toolchain()
         self.profiles=json.loads((ROOT/'config/profiles.json').read_text())
         for name,cfg in self.profiles.items():
             for variant,settings in VARIANTS.items():
@@ -249,9 +251,9 @@ class CiBuildArtifacts(unittest.TestCase):
     def test_cli_preserves_download_paths_and_source_provenance(self):
         config=self.root/'config'; config.mkdir()
         (config/'profiles.json').write_text(json.dumps(self.profiles))
-        (config/'toolchain.json').write_text(json.dumps(self.toolchain))
-        shutil.copytree(self.sdk,self.root/'.tools/emsdk/upstream/emscripten')
-        shutil.copytree(self.dawn,self.root/'.tools/emdawnwebgpu_pkg')
+        seed_toolchain(self.root, self.toolchain)
+        shutil.copytree(self.sdk,self.root.parent/'.tools/emsdk/upstream/emscripten')
+        shutil.copytree(self.dawn,self.root.parent/'.tools/emdawnwebgpu_pkg')
         argv=['stage_ci_build.py','--profile','webgpu-wasm64-jspi','--variant','browser','--include-toolchain-notices']
         with patch.object(stage_ci_build,'ROOT',self.root), patch.object(sys,'argv',argv), \
              patch.object(stage_ci_build.subprocess,'check_output',return_value=self.source_commit+'\n') as git, \

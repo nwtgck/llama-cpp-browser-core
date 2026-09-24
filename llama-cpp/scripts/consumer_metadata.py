@@ -161,6 +161,7 @@ def metadata(package: Path, repository: str, commit: str, lock: dict, divergence
             'artifactRawBase': f'https://raw.githubusercontent.com/{repository}/{commit}/',
             'sourceArchive': f'https://codeload.github.com/{repository}/tar.gz/{source}',
             'sourceRawBase': f'https://raw.githubusercontent.com/{repository}/{source}/',
+            'sourceRepositoryRawBase': f'https://raw.githubusercontent.com/{repository}/{source}/',
             'upstreamRawBase': f'https://raw.githubusercontent.com/ggml-org/llama.cpp/{upstream}/',
             'manifest': {'path': 'manifest.json', **file_identity(package / 'manifest.json')},
             'identity': 'Exact extracted file bytes: manifest digest above, then manifest path/bytes/SHA-256 entries. Archive compression bytes are not the identity; rendered web text is not a byte-exact download.',

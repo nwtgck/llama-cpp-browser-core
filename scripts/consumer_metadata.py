@@ -21,6 +21,7 @@ def metadata(package: Path, repo: str, commit: str, lock: dict, divergences: dic
     data = legacy.metadata(package / 'llama-cpp', repo, commit, lock, divergences)
     data['runtime']['manifestFormatVersion'] = root_manifest['formatVersion']
     data['runtime']['llamaManifestPath'] = 'llama-cpp/manifest.json'
+    data['retrieval']['sourceRepositoryRawBase'] = data['retrieval']['sourceRawBase']
     data['retrieval']['sourceRawBase'] += 'llama-cpp/'
     data['retrieval']['sourceRuntimePath'] = 'llama-cpp/'
     data['retrieval']['manifest'] = {'path': 'manifest.json', **identity(package / 'manifest.json')}

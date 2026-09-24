@@ -55,14 +55,17 @@ def validate(directory: Path, require_clean: bool = True) -> dict:
                 raise ValueError('Not WebAssembly')
     for required in ('LICENSE', 'licenses/stable-diffusion/LICENSE', 'licenses/embedded/json.hpp.txt', 'licenses/embedded/stb_image.h.txt', 'licenses/embedded/stb_image_resize.h.txt', 'licenses/embedded/stb_image_write.h.txt'):
         if required not in expected: raise ValueError('Missing required image license: ' + required)
-    if not any(path.startswith('licenses/ggml/') for path in expected): raise ValueError('Missing ggml notices')
+    if 'licenses/ggml/LICENSE' not in expected: raise ValueError('Missing ggml repository license')
+    for name in ('emscripten', 'emdawnwebgpu_pkg'):
+        if not any(path.startswith(f'licenses/toolchain/{name}/') for path in expected):
+            raise ValueError('Missing image toolchain notices: ' + name)
     packed = json.loads(subprocess.check_output(['npm', 'pack', '--dry-run', '--json'], cwd=directory, text=True))
     if {entry['path'] for entry in packed[0]['files']} != actual: raise ValueError('npm package tree differs')
     return manifest
 
 def package(build_root: Path, destination: Path, license_roots: list[Path]) -> None:
     sys.path.insert(0, str(ROOT.parent / 'scripts'))
-    from package_notices import collect_notices
+    from package_notices import collect_notices, collect_subtree_notices
     profiles = {}; source = None; upstreams = None
     with tempfile.TemporaryDirectory(prefix='sdb-package-') as temporary:
         out = Path(temporary)
@@ -79,14 +82,17 @@ def package(build_root: Path, destination: Path, license_roots: list[Path]) -> N
         shutil.copy2(ROOT / 'LICENSE', out / 'LICENSE')
         shutil.copy2(ROOT / 'README.md', out / 'README.md')
         sd = ROOT / 'vendor/stable-diffusion.cpp'
-        ggml = ROOT / 'vendor/ggml-webgpu-source/ggml'
+        ggml = ROOT / 'vendor/ggml-webgpu-source'
         collect_notices(sd, out / 'licenses/stable-diffusion')
-        collect_notices(ggml, out / 'licenses/ggml')
+        collect_subtree_notices(ggml, 'ggml', out / 'licenses/ggml')
         (out / 'licenses/embedded').mkdir(parents=True)
         # Preserve the entire embedded notices rather than extract partial licenses.
         for name in ('json.hpp', 'stb_image.h', 'stb_image_resize.h', 'stb_image_write.h'):
             shutil.copy2(sd / 'thirdparty' / name, out / 'licenses/embedded' / (name + '.txt'))
-        for i, root in enumerate(license_roots): collect_notices(root, out / 'licenses/toolchain' / str(i))
+        roots = {root.name: root for root in license_roots}
+        if len(roots) != len(license_roots) or set(roots) != {'emscripten', 'emdawnwebgpu_pkg'}:
+            raise ValueError('Provide exactly the Emscripten and Dawn notice roots')
+        for name, root in roots.items(): collect_notices(root, out / 'licenses/toolchain' / name)
         pkg = {'name': NAME, 'version': '0.1.0', 'private': True, 'type': 'module', 'license': 'MIT',
                'files': ['profiles/', 'licenses/', 'manifest.json', 'README.md', 'LICENSE'],
                'exports': {'./profiles/*': './profiles/*', './manifest.json': './manifest.json'}}
@@ -105,8 +111,10 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--build-root', type=Path, default=ROOT / 'build')
     p.add_argument('--output', type=Path, default=ROOT / 'dist/package')
-    p.add_argument('--license-root', type=Path, action='append', default=[])
+    p.add_argument('--license-root', type=Path, action='append', default=None)
     p.add_argument('--verify-only', action='store_true')
     a = p.parse_args()
-    if not a.verify_only: package(a.build_root, a.output, a.license_root)
+    if not a.verify_only:
+        roots = a.license_root or [ROOT.parent / '.tools/emsdk/upstream/emscripten', ROOT.parent / '.tools/emdawnwebgpu_pkg']
+        package(a.build_root, a.output, roots)
     print(json.dumps({'sourceCommit': validate(a.output)['sourceCommit']}))

@@ -1,0 +1,74 @@
+name: Prepare shared browser toolchain and caches
+description: Restore hash-checked downloads and isolated compiler caches without caching a build tree.
+inputs:
+  runtime:
+    required: true
+    description: Runtime directory
+  profile:
+    required: true
+    description: Exact runtime profile
+  variant:
+    required: true
+    description: Exact runtime variant
+outputs:
+  dawn-key:
+    value: ${{ steps.plan.outputs.dawn-key }}
+    description: Exact content-addressed Dawn archive key
+  dawn-path:
+    value: ${{ steps.plan.outputs.dawn-path }}
+    description: Single download file
+  dawn-hit:
+    value: ${{ steps.dawn.outputs.cache-hit }}
+    description: Exact Dawn hit
+  em-key:
+    value: ${{ steps.plan.outputs.em-key }}
+    description: Exact toolchain and configuration partition
+  em-path:
+    value: ${{ steps.plan.outputs.em-path }}
+    description: Emscripten cache only
+  em-hit:
+    value: ${{ steps.em.outputs.cache-hit }}
+    description: Exact Emscripten hit
+  cc-key:
+    value: ${{ steps.plan.outputs.cc-key }}
+    description: Source snapshot key
+  cc-path:
+    value: ${{ steps.plan.outputs.cc-path }}
+    description: Isolated ccache data
+  cc-hit:
+    value: ${{ steps.cc.outputs.cache-hit }}
+    description: Exact ccache snapshot hit
+runs:
+  using: composite
+  steps:
+    - name: Plan cache partitions and regenerate ccache policy
+      id: plan
+      shell: bash
+      env:
+        RUNTIME: ${{ inputs.runtime }}
+        PROFILE: ${{ inputs.profile }}
+        VARIANT: ${{ inputs.variant }}
+      run: python3 "$GITHUB_WORKSPACE/scripts/ci_cache.py" --runtime "$RUNTIME" --profile "$PROFILE" --variant "$VARIANT"
+    - uses: actions/cache/restore@v4
+      id: dawn
+      with:
+        path: ${{ steps.plan.outputs.dawn-path }}
+        key: ${{ steps.plan.outputs.dawn-key }}
+    - name: Install and verify pinned compiler and Dawn (also on a cache hit)
+      shell: bash
+      run: python3 "$GITHUB_WORKSPACE/scripts/setup_toolchain.py"
+    - uses: actions/cache/restore@v4
+      id: em
+      with:
+        path: ${{ steps.plan.outputs.em-path }}
+        key: ${{ steps.plan.outputs.em-key }}
+    - uses: actions/cache/restore@v4
+      id: cc
+      with:
+        path: ${{ steps.plan.outputs.cc-path }}
+        key: ${{ steps.plan.outputs.cc-key }}
+        # Only source snapshots within this exact compiler/runtime/profile/variant.
+        restore-keys: ${{ steps.plan.outputs.cc-prefix }}
+    - name: Reset counters (not cached objects)
+      shell: bash
+      run: ccache --zero-stats

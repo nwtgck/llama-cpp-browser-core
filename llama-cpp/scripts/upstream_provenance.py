@@ -5,6 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import sys
+sys.path.append(str(Path(__file__).resolve().parents[2] / 'scripts'))
+from browser_toolchain import runtime_toolchain
 import tempfile
 
 from github_api import full_sha, git
@@ -34,7 +37,7 @@ def collect(root: Path, manifest: dict) -> dict:
     patch_files = sorted(path.relative_to(root).as_posix() for path in (root / PATCH_DIRECTORY).rglob('*.patch'))
     enabled = []
     audio_enabled = []
-    toolchain = json.loads((root / 'config/toolchain.json').read_text())
+    toolchain = runtime_toolchain(root)
     for profile, info in manifest['profiles'].items():
         for variant, provenance in info['variants'].items():
             audio_enabled.append(profile + '/' + variant)
@@ -96,7 +99,7 @@ def collect(root: Path, manifest: dict) -> dict:
         'toolchainDivergences': {
             'emscriptenAsyncifyBigInt': {
                 'scope': 'Emscripten runtime, not upstream llama.cpp',
-                'implementation': {'path': 'scripts/patch_emscripten.py', **file_identity(root / 'scripts/patch_emscripten.py')},
+                'implementation': {'path': 'scripts/patch_emscripten.py', 'pathBase': 'sourceRepositoryRawBase', **file_identity(root.parent / 'scripts/patch_emscripten.py')},
                 'emscriptenRelease': toolchain['emscriptenRelease'],
                 'guardPins': toolchain['emscriptenAsyncifyBigIntPatch'],
             },

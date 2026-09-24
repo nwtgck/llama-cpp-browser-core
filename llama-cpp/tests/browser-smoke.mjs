@@ -8,7 +8,7 @@ const packageRoot = resolve(process.argv[2] || 'dist/package');
 const modelFile = resolve(process.argv[3] || 'build/fixture.gguf');
 const chatTestFile = resolve('tests/chat-surface.mjs');
 const chatTemplate = await readFile('vendor/llama.cpp/models/templates/Qwen-Qwen3-0.6B.jinja', 'utf8');
-const playwrightPath = resolve('.tools/browser/node_modules/playwright/index.mjs');
+const playwrightPath = resolve('../.tools/browser/node_modules/playwright/index.mjs');
 const { chromium } = await import(pathToFileURL(playwrightPath).href);
 const mime = { '.mjs': 'text/javascript', '.js': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json' };
 const server = createServer(async (req, res) => {

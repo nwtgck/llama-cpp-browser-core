@@ -1,6 +1,9 @@
 /** Stable Diffusion browser bridge ABI 1. One serial request per instance. */
 export interface StableDiffusionCore {
   HEAPU8: Uint8Array;
+  setCallbacks(callbacks: Pick<CoreOptions, 'onProgress' | 'onLog'>): void;
+  /** Test variant only. Synthetic callback delivery, not inference. */
+  _sdb_test_callbacks?(): void;
   FS: {
     mkdir(path: string): unknown;
     mount(type: unknown, options: { blobs: { name: string; data: Blob }[] }, path: string): unknown;

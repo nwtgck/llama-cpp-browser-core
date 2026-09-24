@@ -9,6 +9,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from fixture_toolchain import merged_toolchain, seed_toolchain
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -41,14 +42,13 @@ class BuildProvenance(unittest.TestCase):
         (self.root/'config').mkdir()
         shutil.copy2(ROOT/'config/profiles.json',self.root/'config/profiles.json')
         shutil.copy2(ROOT/'config/variants.json',self.root/'config/variants.json')
-        toolchain=json.loads((ROOT/'config/toolchain.json').read_text())
+        toolchain=merged_toolchain()
         toolchain['llamaCommit']=upstream_sha
         patched_runtime=b'Synthetic patched Asyncify runtime for the compiler fixture.\n'
         toolchain['emscriptenAsyncifyBigIntPatch']['patchedSha256']=hashlib.sha256(patched_runtime).hexdigest()
-        (self.root/'config/toolchain.json').write_text(json.dumps(toolchain))
+        seed_toolchain(self.root, toolchain, scripts=True)
         (self.root/'scripts').mkdir()
         shutil.copy2(ROOT/'scripts/build.py',self.root/'scripts/build.py')
-        shutil.copy2(ROOT/'scripts/patch_emscripten.py',self.root/'scripts/patch_emscripten.py')
         (self.root/'README.md').write_text('original\n')
         # The real CMake process intentionally runs a probe without WORKING_DIRECTORY,
         # matching the upstream configure-time pattern. No C/C++ or Wasm is compiled.
@@ -100,11 +100,11 @@ class BuildProvenance(unittest.TestCase):
         self.git(directory,'-c','user.name=Build test','-c','user.email=test@example.invalid',
                  'commit','--quiet','-m','test: initialize local fixture')
 
-    def build(self, profile='cpu-wasm32', *, mode=None, check=True, cwd=None):
+    def build(self, profile='cpu-wasm32', *, mode=None, check=True, cwd=None, fresh=False):
         env=self.env.copy()
         if mode is not None:
             env['LCB_TEST_MODE']=mode
-        result=subprocess.run([sys.executable,str(self.root/'scripts/build.py'),'--profile',profile,'--variant','browser'],
+        result=subprocess.run([sys.executable,str(self.root/'scripts/build.py'),'--profile',profile,'--variant','browser', *(['--fresh'] if fresh else [])],
                               cwd=cwd or self.root,env=env,text=True,capture_output=True,check=check)
         self.last_result=result
         if result.returncode:
@@ -112,7 +112,7 @@ class BuildProvenance(unittest.TestCase):
         return json.loads((self.root/'build'/profile/'browser/provenance.json').read_text())
 
     def test_all_profiles_keep_probe_outputs_in_the_build_directory(self):
-        dawn=self.root/'.tools/emdawnwebgpu_pkg'
+        dawn=self.root.parent/'.tools/emdawnwebgpu_pkg'
         dawn.mkdir(parents=True)
         (dawn/'emdawnwebgpu.port.py').write_text('# ignored tool fixture\n')
         for profile in json.loads((ROOT/'config/profiles.json').read_text()):
@@ -127,6 +127,18 @@ class BuildProvenance(unittest.TestCase):
                     self.assertTrue((self.root/'build'/profile/'browser'/name).is_file())
                     self.assertFalse((self.root/name).exists())
                     self.assertFalse((self.caller/name).exists())
+
+    def test_fresh_build_cleans_only_the_selected_profile_variant(self):
+        stale=self.root/'build/cpu-wasm32/browser/stale-output'
+        other=self.root/'build/cpu-wasm32/test/keep-output'
+        for path in (stale, other):
+            path.parent.mkdir(parents=True,exist_ok=True)
+            path.write_text('fixture')
+        info=self.build(fresh=True)
+        self.assertFalse(stale.exists())
+        self.assertTrue(other.is_file())
+        self.assertEqual((self.root/'README.md').read_text(),'original\n')
+        self.assertFalse(info['sourceDirty'])
 
     def test_invocation_from_another_directory_does_not_pollute_the_caller(self):
         info=self.build(cwd=self.caller)

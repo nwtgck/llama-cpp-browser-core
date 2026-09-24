@@ -4,6 +4,9 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
+sys.path.append(str(Path(__file__).resolve().parents[2] / 'scripts'))
+from browser_toolchain import runtime_toolchain
 import re
 import shutil
 import subprocess
@@ -78,12 +81,12 @@ def main():
         parser.error('The staging directory must be inside build/')
     if any(output.is_relative_to(ROOT/'build'/name) for name in profiles):
         parser.error('Do not stage inside a profile build directory')
-    toolchain=json.loads((ROOT/'config/toolchain.json').read_text())
+    toolchain=runtime_toolchain(ROOT)
     source=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     stage_profile(ROOT/'build',output,args.profile,source_commit=source,
                   variant=args.variant,toolchain=toolchain,configuration=profiles[args.profile])
     if args.include_toolchain_notices:
-        stage_toolchain_notices([ROOT/'.tools/emsdk/upstream/emscripten',ROOT/'.tools/emdawnwebgpu_pkg'],output)
+        stage_toolchain_notices([ROOT.parent/'.tools/emsdk/upstream/emscripten',ROOT.parent/'.tools/emdawnwebgpu_pkg'],output)
     print(output)
 
 if __name__=='__main__': main()

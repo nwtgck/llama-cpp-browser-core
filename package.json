@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm --prefix llama-cpp test",
+    "test": "npm --prefix llama-cpp test && node --test stable-diffusion-cpp/tests/*.test.mjs",
     "test:python": "python3 -m unittest discover -s llama-cpp/tests -p 'test_*.py' && python3 -m unittest discover -s tests -p 'test_*.py' && python3 -m unittest discover -s stable-diffusion-cpp/tests -p 'test_*.py'"
   },
   "engines": {

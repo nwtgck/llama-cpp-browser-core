@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from fixture_toolchain import merged_toolchain, seed_toolchain
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -197,7 +198,7 @@ class OverlayProvenance(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name)
+        self.root = Path(self.tmp.name) / 'llama-cpp'
         self.vendor = self.root / 'vendor/llama.cpp'
         (self.vendor / 'tools/mtmd').mkdir(parents=True)
         (self.vendor / 'tools/mtmd/clip.cpp').write_text('before\noriginal\nafter\n')
@@ -206,11 +207,11 @@ class OverlayProvenance(unittest.TestCase):
                      'emscriptenAsyncifyBigIntPatch': {'sourceSha256': '1' * 64, 'patchedSha256': '2' * 64}}
         for name in ['config', 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval', 'scripts', 'cmake', 'bridge', 'docs']:
             (self.root / name).mkdir()
-        (self.root / 'config/toolchain.json').write_text(json.dumps(toolchain))
+        seed_toolchain(self.root, toolchain, scripts=True)
         (self.root / 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-webgpu-bf16.patch').write_text('--- a/clip.cpp\n+++ b/clip.cpp\n@@ -1,3 +1,3 @@\n before\n-original\n+patched\n after\n')
         (self.root / 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-audio-single-thread.patch').write_text((self.root / 'upstream-patches-only-as-a-last-resort-with-explicit-user-approval/mtmd-webgpu-bf16.patch').read_text().replace('clip.cpp', 'mtmd-audio.cpp'))
         for path in ['scripts/prepare_mtmd.py', 'cmake/MtmdOverlay.cmake', 'bridge/mtmd-bf16.h',
-                     'docs/webgpu-bf16-projector.md', 'scripts/patch_emscripten.py',
+                     'docs/webgpu-bf16-projector.md',
                      'cmake/MtmdAudioOverlay.cmake', 'docs/audio-single-thread.md']:
             (self.root / path).write_text('Provenance fixture: ' + path + '\n')
         self.manifest = {'sourceCommit': A, 'llamaCommit': B, 'profiles': {}}

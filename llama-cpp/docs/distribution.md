@@ -7,7 +7,7 @@ Source commits pin llama.cpp through a submodule gitlink. Use `git submodule upd
 The pinned Emscripten Asyncify runtime needs its existing argument-preservation logic
 enabled for Wasm32 bigint exports as well as Memory64. Toolchain setup changes only
 the four relevant preprocessor guards; input and output SHA-256 pins are recorded
-in `config/toolchain.json` and artifact provenance. Unknown source is rejected,
+in repository-root `toolchain/config.json` and artifact provenance. Unknown source is rejected,
 repeat setup is safe, and Asyncify builds verify that the selected compiler is patched.
 
 The source commit, llama.cpp commit, and artifact commit are distinct identifiers. The manifest records the first two. The artifact commit is reported after publication through the Actions output and summary; embedding its own hash in the committed manifest would create a circular reference.

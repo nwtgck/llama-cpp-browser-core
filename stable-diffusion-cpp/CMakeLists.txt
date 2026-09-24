@@ -55,14 +55,20 @@ else()
     file(READ "${CMAKE_CURRENT_SOURCE_DIR}/config/variants.json" variants)
     string(JSON assertions GET "${variants}" "${SDCB_VARIANT}" assertions)
     string(JSON environment GET "${variants}" "${SDCB_VARIANT}" environment)
-    target_link_options(core PRIVATE --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1
+    set(SDCB_TEST_EXPORT "")
+    if(SDCB_VARIANT STREQUAL "test")
+        target_compile_definitions(core PRIVATE SDCB_TEST_HOOKS=1)
+        set(SDCB_TEST_EXPORT ",'_sdb_test_callbacks'")
+    endif()
+    set_property(TARGET core APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/bridge/callbacks.js")
+    target_link_options(core PRIVATE --pre-js "${CMAKE_CURRENT_SOURCE_DIR}/bridge/callbacks.js" --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1
         -sEXPORT_NAME=createStableDiffusionCore "-sENVIRONMENT=${environment}"
         -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4294967296 -sINITIAL_HEAP=33554432
         -sSTACK_SIZE=2097152 -sWASM_BIGINT=1 -sEXIT_RUNTIME=0 -sFORCE_FILESYSTEM=1
         "-sASSERTIONS=${assertions}" -lworkerfs.js
-        "-sEXPORTED_FUNCTIONS=['_sdb_abi_version','_sdb_load','_sdb_generate','_sdb_error','_sdb_model_version','_sdb_image_data','_sdb_image_width','_sdb_image_height','_sdb_release_image','_sdb_unload']"
+        "-sEXPORTED_FUNCTIONS=['_sdb_abi_version','_sdb_load','_sdb_generate','_sdb_error','_sdb_model_version','_sdb_image_data','_sdb_image_width','_sdb_image_height','_sdb_release_image','_sdb_unload'${SDCB_TEST_EXPORT}]"
         "-sEXPORTED_RUNTIME_METHODS=['FS','WORKERFS','HEAPU8','ccall','UTF8ToString']"
-        "-sINCOMING_MODULE_JS_API=['wasmBinary','instantiateWasm','locateFile','print','printErr','onAbort','onProgress','onLog']")
+        "-sINCOMING_MODULE_JS_API=['wasmBinary','instantiateWasm','locateFile','print','printErr','onAbort']")
     if(SDCB_JSPI)
         target_link_options(core PRIVATE -sJSPI=1 "-sJSPI_EXPORTS=['sdb_load','sdb_generate']")
     else()

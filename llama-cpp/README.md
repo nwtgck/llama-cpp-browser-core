@@ -51,10 +51,12 @@ See the [API and ownership contract](docs/core-contract.md) and the [OPFS worker
 
 Prerequisites: Linux, Git, Python 3.11 or later, Clang, CMake 3.24 or later, Ninja, and Node.js 22. Downloading the toolchain requires network access.
 
+Run these commands from `llama-cpp/`:
+
 ```sh
 git submodule update --init --recursive
-python3 scripts/setup_toolchain.py
-source .tools/emsdk/emsdk_env.sh
+python3 ../scripts/setup_toolchain.py
+source ../.tools/emsdk/emsdk_env.sh
 for profile in cpu-wasm32 cpu-wasm64 webgpu-wasm32-asyncify webgpu-wasm32-jspi webgpu-wasm64-jspi; do
   for variant in browser test; do
     python3 scripts/build.py --profile "$profile" --variant "$variant"
@@ -63,7 +65,7 @@ done
 python3 scripts/package_runtime.py
 ```
 
-Build outputs go to `build/<profile>/<variant>/runtime/`; the assembled package goes to `dist/package/`. Do not commit generated binaries to source branches. Toolchain and upstream pins are in `config/toolchain.json`; profile and variant settings are in `config/profiles.json` and `config/variants.json`.
+Build outputs go to `build/<profile>/<variant>/runtime/`; the assembled package goes to `dist/package/`. Do not commit generated binaries to source branches. The shared compiler/Dawn pins are in `../toolchain/config.json`; the llama upstream pin is in `config/toolchain.json`; profile and variant settings are in `config/profiles.json` and `config/variants.json`.
 
 | Profile | Pointer width | Maximum linear memory | Backends |
 |---|---:|---:|---|
@@ -96,6 +98,11 @@ python3 tests/native_smoke.py --library build/native/libcore.so \
 The generated model is a small, deterministic, untrained GGUF fixture. Its purpose is to exercise loading and execution, not language quality or compatibility with large trained models. Native tests, host-side mocks, and browser Wasm tests cover different execution paths.
 
 ## Distribution
+
+This runtime is one component of [Browser Inference Core](../README.md). Its
+package and browser checks run independently of the image runtime. Only final
+publication joins both. See the [common cache policy](../toolchain/README.md).
+
 
 Source branches contain the pinned llama.cpp submodule and build tooling. The `artifacts` branch contains only the installable runtime, types, schemas, manifest, and license notices.
 

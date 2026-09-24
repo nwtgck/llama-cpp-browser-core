@@ -5,6 +5,7 @@ import re
 import sys
 import tempfile
 import unittest
+from fixture_toolchain import merged_toolchain, seed_toolchain
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,17 +40,18 @@ class ProfileConfiguration(unittest.TestCase):
             'browser': {'assertions': 0, 'environment': 'web,worker'},
             'test': {'assertions': 1, 'environment': 'web,worker,node'},
         })
-        toolchain = json.loads((ROOT / 'config/toolchain.json').read_text())
+        toolchain = merged_toolchain()
         with tempfile.TemporaryDirectory(prefix='lcb-profile-test-') as temporary:
-            root = Path(temporary)
+            root = Path(temporary) / 'llama-cpp'
+            root.mkdir()
             (root / 'config').mkdir()
             (root / 'config/profiles.json').write_text(json.dumps(profiles))
             (root / 'config/variants.json').write_text(json.dumps(variants))
-            (root / 'config/toolchain.json').write_text(json.dumps(toolchain))
+            seed_toolchain(root, toolchain)
             (root / 'vendor/llama.cpp/include').mkdir(parents=True)
             (root / 'vendor/llama.cpp/include/llama.h').touch()
-            (root / '.tools/emdawnwebgpu_pkg').mkdir(parents=True)
-            (root / '.tools/emdawnwebgpu_pkg/emdawnwebgpu.port.py').touch()
+            (root.parent / '.tools/emdawnwebgpu_pkg').mkdir(parents=True)
+            (root.parent / '.tools/emdawnwebgpu_pkg/emdawnwebgpu.port.py').touch()
             for profile, values in expected.items():
                 for variant, settings in variants.items():
                     with self.subTest(profile=profile, variant=variant), \

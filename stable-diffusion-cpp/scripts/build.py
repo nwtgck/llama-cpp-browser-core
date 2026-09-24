@@ -13,7 +13,8 @@ import time
 from prepare_upstream import prepare
 ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT.parent
-sys.path.insert(0, str(REPO / 'llama-cpp/scripts'))
+sys.path.insert(0, str(REPO / 'scripts'))
+from browser_toolchain import load_toolchain
 from patch_emscripten import verify_asyncify_bigint_patch
 
 def git(*args: str, cwd: Path = REPO) -> str:
@@ -25,6 +26,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--profile', choices=list(profiles), required=True)
     parser.add_argument('--variant', choices=list(variants), required=True)
+    parser.add_argument('--include-toolchain-notices', action='store_true')
+    parser.add_argument('--fresh', action='store_true', help='Discard this profile/variant build tree before configuration')
     parser.add_argument('--jobs', type=int, default=min(os.cpu_count() or 2, 4))
     args = parser.parse_args()
     if args.jobs < 1: parser.error('jobs must be positive')
@@ -41,7 +44,7 @@ def main() -> None:
         link = git('ls-tree', 'HEAD', '--', 'stable-diffusion-cpp/' + pin['path']).split()
         if link[:3] != ['160000', 'commit', pin['commit']]: parser.error(f'{key} gitlink differs from pin')
         sources[key] = source
-    toolchain = json.loads((REPO / 'llama-cpp/config/toolchain.json').read_text())
+    toolchain = load_toolchain(REPO)
     version = subprocess.check_output(['emcc', '--version'], text=True).splitlines()[0]
     if not re.search(r'(?<!\d)' + re.escape(toolchain['emsdkVersion']) + r'(?!\d)', version):
         parser.error('Wrong Emscripten version')
@@ -49,12 +52,13 @@ def main() -> None:
         compiler = shutil.which('emcc')
         if compiler is None: parser.error('Missing emcc')
         verify_asyncify_bigint_patch(Path(compiler).resolve().parent, toolchain['emscriptenAsyncifyBigIntPatch'])
-    tools = REPO / 'llama-cpp/.tools'
+    tools = REPO / '.tools'
     dawn = tools / 'emdawnwebgpu_pkg'
-    if not (dawn / 'emdawnwebgpu.port.py').is_file(): parser.error('Run llama-cpp/scripts/setup_toolchain.py')
+    if not (dawn / 'emdawnwebgpu.port.py').is_file(): parser.error('Run scripts/setup_toolchain.py from the repository root')
     source_commit = git('rev-parse', 'HEAD')
     before = git('status', '--porcelain=v1', '--untracked-files=all', '--ignore-submodules=none').splitlines()
     build = ROOT / 'build' / args.profile / args.variant
+    if args.fresh and build.exists(): shutil.rmtree(build)
     prepared = build / 'prepared'
     if prepared.exists(): shutil.rmtree(prepared)
     patch_report = prepare(sources, prepared)
@@ -73,6 +77,7 @@ def main() -> None:
                   'upstreams': upstreams, 'configuration': config, 'variantConfiguration': variants[args.variant],
                   'toolchain': toolchain, 'emccVersion': version, 'cmakeCommand': command,
                   'patches': patch_report, 'builtAtUnix': int(time.time()),
+                  'buildCache': {'identity': os.environ.get('BIC_CACHE_ID'), 'compilerWrapper': os.environ.get('EM_COMPILER_WRAPPER')},
                   'validation': {'compiled': True, 'browserSmoke': False, 'realModelInference': False}}
     (build / 'provenance.json').write_text(json.dumps(provenance, indent=2) + '\n')
     # Only the runtime and provenance cross CI runners, never prepared sources.
@@ -81,6 +86,9 @@ def main() -> None:
     shutil.copytree(build / 'runtime', stage / 'runtime')
     shutil.copy2(build / 'provenance.json', stage / 'provenance.json')
     if before or after: raise RuntimeError('Source changed; refusing to stage a publishable build')
+    if args.include_toolchain_notices:
+        from package_notices import stage_toolchain_notices
+        stage_toolchain_notices([tools / 'emsdk/upstream/emscripten', dawn], ROOT / 'build/ci-upload')
     print(stage)
 
 if __name__ == '__main__': main()

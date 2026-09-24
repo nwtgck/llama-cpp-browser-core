@@ -71,7 +71,8 @@ upstream-update review; do not patch it out to freeze the old behavior.
 
 ## Other existing deviations
 
-The Emscripten Asyncify/BigInt correction in `scripts/patch_emscripten.py` and the
+The Emscripten Asyncify/BigInt correction in repository-root
+`scripts/patch_emscripten.py` (moved unchanged to the shared toolchain layer) and the
 pinned link-option correction in `CMakeLists.txt` are existing toolchain/build
 workarounds, not new exceptions introduced by this cleanup. Their behavior is
 unchanged. The same approval policy applies to expanding them even though they

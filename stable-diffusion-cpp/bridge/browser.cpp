@@ -13,10 +13,10 @@
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 EM_JS(void, browser_progress, (int step, int steps, float seconds), {
-    if (Module['onProgress']) Module['onProgress'](step, steps, seconds);
+    Module['sdbDispatchProgress'](step, steps, seconds);
 });
 EM_JS(void, browser_log, (int level, const char* message), {
-    if (Module['onLog']) Module['onLog'](level, UTF8ToString(message));
+    Module['sdbDispatchLog'](level, UTF8ToString(message));
 });
 #else
 static void browser_progress(int, int, float) {}
@@ -63,6 +63,13 @@ std::string model_path(const json& value, const char* key) {
 }
 
 extern "C" {
+#ifdef SDCB_TEST_HOOKS
+// A deterministic callback-path test, NOT a model or GPU execution result.
+void sdb_test_callbacks() {
+    browser_progress(1, 4, 0.125f);
+    browser_log(static_cast<int>(SD_LOG_INFO), "browser callback probe");
+}
+#endif
 int sdb_abi_version() { return 1; }
 const char* sdb_error() { return error.c_str(); }
 const char* sdb_model_version() { return context ? sd_get_model_version_name(context.get()) : "Unloaded"; }
@@ -113,6 +120,7 @@ int sdb_load(const char* request) {
         return 1;
     } catch (const std::exception& failure) { error = failure.what(); }
       catch (...) { error = "Unknown model initialization failure"; }
+    browser_log(static_cast<int>(SD_LOG_ERROR), error.c_str());
     return 0;
 }
 int sdb_generate(const char* request) {
@@ -152,7 +160,9 @@ int sdb_generate(const char* request) {
         return 1;
     } catch (const std::exception& failure) { error = failure.what(); }
       catch (...) { error = "Unknown generation failure"; }
-    release_images(); return 0;
+    release_images();
+    browser_log(static_cast<int>(SD_LOG_ERROR), error.c_str());
+    return 0;
 }
 const uint8_t* sdb_image_data() { return images ? images[0].data : nullptr; }
 int sdb_image_width() { return images ? static_cast<int>(images[0].width) : 0; }
