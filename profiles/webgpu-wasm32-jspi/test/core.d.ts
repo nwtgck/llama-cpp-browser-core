@@ -689,6 +689,8 @@ interface WasmModule {
   _llama_adapter_lora_free(_0: number): Promise<void>;
   _lcb_llama_adapter_lora_init(_0: BigInt, _1: BigInt): Promise<BigInt>;
   _llama_adapter_lora_init(_0: number, _1: number): Promise<number>;
+  _lcb_llama_adapter_lora_init_from_file_ptr(_0: BigInt, _1: BigInt): Promise<BigInt>;
+  _llama_adapter_lora_init_from_file_ptr(_0: number, _1: number): Promise<number>;
   _lcb_llama_adapter_meta_count(_0: BigInt): Promise<number>;
   _llama_adapter_meta_count(_0: number): Promise<number>;
   _lcb_llama_adapter_meta_key_by_index(_0: BigInt, _1: number, _2: BigInt, _3: BigInt): Promise<number>;

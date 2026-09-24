@@ -3578,6 +3578,24 @@
       ]
     },
     {
+      "name": "llama_adapter_lora_init_from_file_ptr",
+      "export": "_lcb_llama_adapter_lora_init_from_file_ptr",
+      "returnType": "struct llama_adapter_lora *(struct llama_model *, FILE *)",
+      "returnKind": "pointer",
+      "parameters": [
+        {
+          "name": "model",
+          "cType": "struct llama_model *",
+          "kind": "pointer"
+        },
+        {
+          "name": "file",
+          "cType": "FILE *",
+          "kind": "pointer"
+        }
+      ]
+    },
+    {
       "name": "llama_adapter_meta_count",
       "export": "_lcb_llama_adapter_meta_count",
       "returnType": "int32_t",
@@ -10664,6 +10682,7 @@
     "LLAMA_VOCAB_TYPE_PLAMO2",
     "LLAMA_VOCAB_TYPE_RWKV",
     "LLAMA_VOCAB_TYPE_SPM",
+    "LLAMA_VOCAB_TYPE_TEST",
     "LLAMA_VOCAB_TYPE_UGM",
     "LLAMA_VOCAB_TYPE_WPM",
     "MTMD_GEN_AUDIO_TYPE_NONE",

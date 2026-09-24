@@ -201,6 +201,7 @@ export interface LowLevelFunctions {
   llama_adapter_get_alora_n_invocation_tokens(arg0: bigint): Promise<bigint>;
   llama_adapter_lora_free(arg0: bigint): Promise<void>;
   llama_adapter_lora_init(arg0: bigint, arg1: bigint): Promise<bigint>;
+  llama_adapter_lora_init_from_file_ptr(arg0: bigint, arg1: bigint): Promise<bigint>;
   llama_adapter_meta_count(arg0: bigint): Promise<number>;
   llama_adapter_meta_key_by_index(arg0: bigint, arg1: number, arg2: bigint, arg3: bigint): Promise<number>;
   llama_adapter_meta_val_str(arg0: bigint, arg1: bigint, arg2: bigint, arg3: bigint): Promise<number>;

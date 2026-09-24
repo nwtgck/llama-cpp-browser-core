@@ -685,6 +685,8 @@ interface WasmModule {
   _llama_adapter_lora_free(_0: number): void;
   _lcb_llama_adapter_lora_init(_0: BigInt, _1: BigInt): BigInt;
   _llama_adapter_lora_init(_0: number, _1: number): number;
+  _lcb_llama_adapter_lora_init_from_file_ptr(_0: BigInt, _1: BigInt): BigInt;
+  _llama_adapter_lora_init_from_file_ptr(_0: number, _1: number): number;
   _lcb_llama_adapter_meta_count(_0: BigInt): number;
   _llama_adapter_meta_count(_0: number): number;
   _lcb_llama_adapter_meta_key_by_index(_0: BigInt, _1: number, _2: BigInt, _3: BigInt): number;
