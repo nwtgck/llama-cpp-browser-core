@@ -1,0 +1,416 @@
+diff --git a/src/model_io/gguf_reader_ext.h b/src/model_io/gguf_reader_ext.h
+index dcce38576d99491a29fa9889d609265941041c25..09ef2a0f1bdd64a30d58449f06f914a66f4dcfac 100644
+--- a/src/model_io/gguf_reader_ext.h
++++ b/src/model_io/gguf_reader_ext.h
+@@ -30,6 +30,8 @@ class GGUFReader {
+     // buffer, so querying it before every small field repeatedly rereads data.
+     uint64_t position_ = 0;
+     uint32_t alignment_ = 32;
++    uint64_t split_no_ = 0, split_count_ = 1, split_tensors_ = 0;
++    std::set<std::string> split_keys_;
+ 
+     uint64_t tell(std::ifstream& in) const {
+         const auto pos = in.tellg();
+@@ -108,6 +110,7 @@ class GGUFReader {
+ public:
+     bool load(const std::string& path) {
+         tensors_.clear(); data_offset_ = 0; file_size_ = 0; position_ = 0; alignment_ = 32;
++        split_no_ = 0; split_count_ = 1; split_tensors_ = 0; split_keys_.clear();
+         try {
+             static_assert(sizeof(std::streamoff) >= 8, "GGUF files require 64-bit stream offsets");
+             std::ifstream in(path, std::ios::binary);
+@@ -131,10 +134,23 @@ public:
+                     alignment_seen = true;
+                     alignment_ = integer<uint32_t>(in);
+                     if (!alignment_ || (alignment_ & (alignment_ - 1))) throw std::runtime_error("invalid GGUF alignment");
++                } else if (key == "split.no" || key == "split.count" || key == "split.tensors.count") {
++                    if (!split_keys_.insert(key).second) throw std::runtime_error("duplicate GGUF split metadata");
++                    uint64_t n;
++                    if (type == 2) n = integer<uint16_t>(in);
++                    else if (type == 4 || type == 5) n = integer<uint32_t>(in);
++                    else if (type == 10 || type == 11) n = integer<uint64_t>(in);
++                    else throw std::runtime_error("invalid GGUF split metadata type");
++                    if (key == "split.no") split_no_ = n;
++                    else if (key == "split.count") split_count_ = n;
++                    else split_tensors_ = n;
+                 } else {
+                     value(in, type);
+                 }
+             }
++            if (!split_keys_.empty() && (split_keys_.size() != 3 || split_count_ == 0 ||
++                split_count_ > 65535 || split_no_ >= split_count_ || split_tensors_ < tensors || split_tensors_ > INT64_MAX))
++                throw std::runtime_error("incomplete or invalid GGUF split metadata");
+             std::set<std::string> names;
+             std::vector<uint64_t> sizes;
+             for (uint64_t i = 0; i < tensors; ++i) {
+@@ -186,6 +202,9 @@ public:
+     }
+     const std::vector<GGUFTensorInfo>& tensors() const { return tensors_; }
+     uint64_t data_offset() const { return data_offset_; }
++    uint64_t split_no() const { return split_no_; }
++    uint64_t split_count() const { return split_count_; }
++    uint64_t split_tensors() const { return split_tensors_; }
+ };
+ 
+ #endif // __SD_MODEL_IO_GGUF_READER_EXT_H__
+diff --git a/src/model_io/safetensors_io.cpp b/src/model_io/safetensors_io.cpp
+index 3e6974237138ba3f3587cffa4c4c3c512e7e8924..3e72c68e1b5feb58fb82efdbb67088ea6ab5879b 100644
+--- a/src/model_io/safetensors_io.cpp
++++ b/src/model_io/safetensors_io.cpp
+@@ -5,6 +5,7 @@
+ #include <exception>
+ #include <filesystem>
+ #include <fstream>
++#include <limits>
+ #include <ostream>
+ #include <string>
+ #include <unordered_map>
+@@ -18,6 +19,80 @@
+ namespace fs = std::filesystem;
+ 
+ static constexpr size_t ST_HEADER_SIZE_LEN = 8;
++// A file position is independent of the Wasm linear-memory/address width.
++static constexpr uint64_t ST_MAX_HEADER = 100ULL * 1024 * 1024;
++static uint64_t st_file_size(std::ifstream& file) {
++    static_assert(sizeof(std::streamoff) >= 8, "safetensors require 64-bit offsets");
++    file.seekg(0, std::ios::end);
++    const auto end = file.tellg();
++    if (end < 0) throw std::runtime_error("cannot determine safetensors file size");
++    file.seekg(0, std::ios::beg);
++    if (!file) throw std::runtime_error("cannot seek safetensors file");
++    return static_cast<uint64_t>(end);
++}
++static bool st_relative_path(const std::string& path) {
++    if (path.empty() || path.front() == '/' || path.find('\\') != std::string::npos ||
++        path.find(':') != std::string::npos || path.find('\0') != std::string::npos) return false;
++    size_t start = 0;
++    while (start <= path.size()) {
++        const size_t end = path.find('/', start);
++        const std::string part = path.substr(start, end == std::string::npos ? end : end - start);
++        if (part.empty() || part == "." || part == "..") return false;
++        if (end == std::string::npos) break;
++        start = end + 1;
++    }
++    return true;
++}
++// Reject ambiguous JSON rather than letting the last duplicate tensor win.
++static nlohmann::json st_parse_json(const char* begin, const char* end) {
++    std::vector<std::unordered_set<std::string>> keys;
++    size_t key_count = 0;
++    return nlohmann::json::parse(begin, end, [&](int depth, nlohmann::json::parse_event_t event, nlohmann::json& parsed) {
++        if (depth > 64) throw std::runtime_error("safetensors JSON nesting limit");
++        if (event == nlohmann::json::parse_event_t::object_start) keys.emplace_back();
++        else if (event == nlohmann::json::parse_event_t::key) {
++            if (++key_count > 1000000 || keys.empty() || !keys.back().insert(parsed.get<std::string>()).second)
++                throw std::runtime_error("duplicate safetensors JSON key");
++        } else if (event == nlohmann::json::parse_event_t::object_end) keys.pop_back();
++        return true;
++    });
++}
++static uint64_t st_unsigned(const nlohmann::json& value) {
++    if (!value.is_number_unsigned() && !value.is_number_integer()) throw std::runtime_error("expected integer");
++    if (value.is_number_integer() && !value.is_number_unsigned() && value.get<int64_t>() < 0)
++        throw std::runtime_error("negative size/offset");
++    return value.get<uint64_t>();
++}
++static void st_validate_header(const nlohmann::json& header, uint64_t payload_bytes) {
++    if (!header.is_object()) throw std::runtime_error("safetensors header is not an object");
++    std::vector<std::pair<uint64_t, uint64_t>> ranges;
++    for (const auto& item : header.items()) {
++        if (item.key() == "__metadata__") {
++            if (!item.value().is_object()) throw std::runtime_error("invalid safetensors metadata");
++            for (const auto& meta : item.value().items()) if (!meta.value().is_string())
++                throw std::runtime_error("non-string safetensors metadata");
++            continue;
++        }
++        const auto& tensor = item.value();
++        if (item.key().empty() || item.key().find('\0') != std::string::npos || !tensor.is_object() ||
++            !tensor.contains("dtype") || !tensor["dtype"].is_string() ||
++            !tensor.contains("shape") || !tensor["shape"].is_array() ||
++            !tensor.contains("data_offsets") || !tensor["data_offsets"].is_array() || tensor["data_offsets"].size() != 2)
++            throw std::runtime_error("invalid safetensors tensor descriptor");
++        const uint64_t begin = st_unsigned(tensor["data_offsets"][0]);
++        const uint64_t end = st_unsigned(tensor["data_offsets"][1]);
++        if (begin > end || end > payload_bytes) throw std::runtime_error("safetensors offsets out of bounds");
++        for (const auto& dim : tensor["shape"]) (void) st_unsigned(dim);
++        ranges.emplace_back(begin, end);
++    }
++    std::sort(ranges.begin(), ranges.end());
++    uint64_t cursor = 0;
++    for (const auto& range : ranges) {
++        if (range.first != cursor) throw std::runtime_error("overlap or hole in safetensors data");
++        cursor = range.second;
++    }
++    if (cursor != payload_bytes) throw std::runtime_error("unindexed safetensors data");
++}
+ 
+ static void set_error(std::string* error, const std::string& message) {
+     if (error != nullptr) {
+@@ -40,9 +115,9 @@ bool is_safetensors_file(const std::string& file_path) {
+     }
+ 
+     // get file size
+-    file.seekg(0, file.end);
+-    size_t file_size_ = file.tellg();
+-    file.seekg(0, file.beg);
++    uint64_t file_size_;
++    try { file_size_ = st_file_size(file); }
++    catch (const std::exception&) { return false; }
+ 
+     // read header size
+     if (file_size_ <= ST_HEADER_SIZE_LEN) {
+@@ -55,21 +130,23 @@ bool is_safetensors_file(const std::string& file_path) {
+         return false;
+     }
+ 
+-    size_t header_size_ = model_io::read_u64(header_size_buf);
+-    if (header_size_ > file_size_ - ST_HEADER_SIZE_LEN || header_size_ <= 2) {
++    uint64_t header_size_ = model_io::read_u64(header_size_buf);
++    if (header_size_ > ST_MAX_HEADER || header_size_ > SIZE_MAX - 1 || header_size_ > file_size_ - ST_HEADER_SIZE_LEN || header_size_ < 2) {
+         return false;
+     }
+ 
+     // read header
+     std::vector<char> header_buf;
+-    header_buf.resize(header_size_ + 1);
++    header_buf.resize(static_cast<size_t>(header_size_) + 1);
+     header_buf[header_size_] = '\0';
+     file.read(header_buf.data(), header_size_);
+     if (!file) {
+         return false;
+     }
+     try {
+-        nlohmann::json header_ = nlohmann::json::parse(header_buf.data());
++        if (header_buf[0] != '{') return false;
++        nlohmann::json header_ = st_parse_json(header_buf.data(), header_buf.data() + header_size_);
++        if (!header_.is_object()) return false;
+     } catch (const std::exception&) {
+         return false;
+     }
+@@ -116,8 +193,8 @@ struct ComfyQuantConfig {
+ static bool read_comfy_quant_config(std::ifstream& file,
+                                     const std::string& file_path,
+                                     const std::string& tensor_name,
+-                                    size_t offset,
+-                                    size_t size,
++                                    uint64_t offset,
++                                    uint64_t size,
+                                     ComfyQuantConfig& config,
+                                     std::string* error) {
+     static constexpr size_t MAX_COMFY_QUANT_CONFIG_SIZE = 64 * 1024;
+@@ -136,7 +213,7 @@ static bool read_comfy_quant_config(std::ifstream& file,
+     }
+ 
+     try {
+-        const nlohmann::json json = nlohmann::json::parse(data.data(), data.data() + size);
++        const nlohmann::json json = st_parse_json(data.data(), data.data() + size);
+         config.format             = json.value("format", "");
+         config.convrot            = json.value("convrot", false);
+         config.group_size         = json.value("convrot_groupsize", 0);
+@@ -160,9 +237,9 @@ bool read_safetensors_file(const std::string& file_path,
+     }
+ 
+     // get file size
+-    file.seekg(0, file.end);
+-    size_t file_size_ = file.tellg();
+-    file.seekg(0, file.beg);
++    uint64_t file_size_;
++    try { file_size_ = st_file_size(file); }
++    catch (const std::exception&) { return false; }
+ 
+     // read header size
+     if (file_size_ <= ST_HEADER_SIZE_LEN) {
+@@ -177,16 +254,16 @@ bool read_safetensors_file(const std::string& file_path,
+         return false;
+     }
+ 
+-    size_t header_size_ = model_io::read_u64(header_size_buf);
+-    if (header_size_ > file_size_ - ST_HEADER_SIZE_LEN) {
++    uint64_t header_size_ = model_io::read_u64(header_size_buf);
++    if (header_size_ < 2 || header_size_ > ST_MAX_HEADER || header_size_ > SIZE_MAX - 1 || header_size_ > file_size_ - ST_HEADER_SIZE_LEN) {
+         set_error(error, "invalid safetensor file '" + file_path + "'");
+         return false;
+     }
+-    const size_t data_start = ST_HEADER_SIZE_LEN + header_size_;
++    const uint64_t data_start = ST_HEADER_SIZE_LEN + header_size_;
+ 
+     // read header
+     std::vector<char> header_buf;
+-    header_buf.resize(header_size_ + 1);
++    header_buf.resize(static_cast<size_t>(header_size_) + 1);
+     header_buf[header_size_] = '\0';
+     file.read(header_buf.data(), header_size_);
+     if (!file) {
+@@ -196,7 +273,9 @@ bool read_safetensors_file(const std::string& file_path,
+ 
+     nlohmann::json header_;
+     try {
+-        header_ = nlohmann::json::parse(header_buf.data());
++        if (header_buf[0] != '{') throw std::runtime_error("invalid safetensors prefix");
++        header_ = st_parse_json(header_buf.data(), header_buf.data() + header_size_);
++        st_validate_header(header_, file_size_ - data_start);
+     } catch (const std::exception&) {
+         set_error(error, "parsing safetensors header failed: '" + file_path + "'");
+         return false;
+@@ -226,8 +305,8 @@ bool read_safetensors_file(const std::string& file_path,
+             set_error(error, "invalid dtype for ComfyUI quantization metadata tensor '" + name + "'");
+             return false;
+         }
+-        const size_t begin = tensor_info["data_offsets"][0].get<size_t>();
+-        const size_t end   = tensor_info["data_offsets"][1].get<size_t>();
++        const uint64_t begin = tensor_info["data_offsets"][0].get<uint64_t>();
++        const uint64_t end   = tensor_info["data_offsets"][1].get<uint64_t>();
+         if (begin > end || end > file_size_ - data_start) {
+             set_error(error, "data offsets out of bounds for tensor '" + name + "'");
+             return false;
+@@ -265,8 +344,8 @@ bool read_safetensors_file(const std::string& file_path,
+             continue;
+         }
+ 
+-        size_t begin = tensor_info["data_offsets"][0].get<size_t>();
+-        size_t end   = tensor_info["data_offsets"][1].get<size_t>();
++        uint64_t begin = tensor_info["data_offsets"][0].get<uint64_t>();
++        uint64_t end   = tensor_info["data_offsets"][1].get<uint64_t>();
+         if (begin > end || end > file_size_ - data_start) {
+             set_error(error, "data offsets out of bounds for tensor '" + name + "'");
+             return false;
+@@ -321,6 +400,12 @@ bool read_safetensors_file(const std::string& file_path,
+             return false;
+         }
+ 
++        const uint64_t native_bytes = elements / ggml_blck_size(type) * ggml_type_size(type);
++        if (native_bytes > SIZE_MAX || end - begin > SIZE_MAX) {
++            set_error(error, "single safetensors tensor exceeds the selected address width: '" + name + "'");
++            return false;
++        }
++
+         if (n_dims == 5) {
+             n_dims = 4;
+             ne[0]  = ne[0] * ne[1];
+@@ -370,7 +455,7 @@ bool read_safetensors_file(const std::string& file_path,
+             }
+         }
+ 
+-        size_t tensor_data_size = end - begin;
++        uint64_t tensor_data_size = end - begin;
+ 
+         bool tensor_size_ok;
+         if (dtype == "F8_E4M3") {
+@@ -426,7 +511,12 @@ bool read_safetensors_index_file(const std::string& file_path,
+ 
+     nlohmann::json index;
+     try {
+-        index = nlohmann::json::parse(file);
++        const uint64_t bytes = st_file_size(file);
++        if (bytes == 0 || bytes > 16ULL * 1024 * 1024) throw std::runtime_error("safetensors index too large");
++        std::vector<char> data(static_cast<size_t>(bytes));
++        file.read(data.data(), static_cast<std::streamsize>(bytes));
++        if (!file) throw std::runtime_error("truncated safetensors index");
++        index = st_parse_json(data.data(), data.data() + data.size());
+     } catch (const std::exception&) {
+         set_error(error, "parsing safetensors index failed: '" + file_path + "'");
+         return false;
+@@ -444,6 +534,10 @@ bool read_safetensors_index_file(const std::string& file_path,
+             return false;
+         }
+ 
++        if (!st_relative_path(item.value().get<std::string>())) {
++            set_error(error, "safetensors index shard must stay below its directory");
++            return false;
++        }
+         std::string shard_path = resolve_index_shard_path(file_path,
+                                                           item.value().get<std::string>());
+         if (seen_shard_paths.insert(shard_path).second) {
+diff --git a/src/model_loader.cpp b/src/model_loader.cpp
+index cbf61094820db5ac20dc078f29bcd1f800373f9d..cdeb75bd073b59cb32a677d88db14c2cbf24eec1 100644
+--- a/src/model_loader.cpp
++++ b/src/model_loader.cpp
+@@ -1,3 +1,6 @@
++#include <iomanip>
++#include <regex>
++#include "model_io/gguf_reader_ext.h"
+ #include <algorithm>
+ #include <atomic>
+ #include <chrono>
+@@ -260,6 +263,56 @@ bool ModelLoader::init_from_file_and_convert_name(const std::string& file_path,
+ bool ModelLoader::init_from_gguf_file(const std::string& file_path, const std::string& prefix) {
+     LOG_VERBOSE("init from '%s'", file_path.c_str());
+ 
++#ifdef SD_BROWSER_WEBGPU
++    GGUFReader head;
++    if (!head.load(file_path)) return false;
++    if (head.split_count() > 1) {
++        std::smatch match;
++        const std::regex pattern("^(.*)-([0-9]{5})-of-([0-9]{5})(\\.[gG][gG][uU][fF])$");
++        if (!std::regex_match(file_path, match, pattern) ||
++            std::stoul(match[2]) != head.split_no() + 1 || std::stoul(match[3]) != head.split_count()) {
++            LOG_ERROR("GGUF split metadata does not match its standard shard filename");
++            return false;
++        }
++        struct Part { std::string path; std::vector<TensorStorage> tensors; FileStamp stamp; };
++        std::vector<Part> parts;
++        std::set<std::string> names;
++        uint64_t total = 0;
++        for (uint64_t i = 0; i < head.split_count(); ++i) {
++            std::ostringstream filename;
++            filename << match[1] << '-' << std::setfill('0') << std::setw(5) << (i + 1)
++                     << "-of-" << match[3] << match[4];
++            Part part; part.path = filename.str();
++            GGUFReader reader;
++            std::string error;
++            if (!read_file_stamp(part.path, part.stamp) || !reader.load(part.path) ||
++                reader.split_no() != i || reader.split_count() != head.split_count() ||
++                reader.split_tensors() != head.split_tensors() ||
++                !read_gguf_file(part.path, part.tensors, &error)) {
++                LOG_ERROR("Missing or inconsistent GGUF shard '%s': %s", part.path.c_str(), error.c_str());
++                return false;
++            }
++            for (const auto& tensor : part.tensors) {
++                if (!names.insert(tensor.name).second) { LOG_ERROR("Duplicate GGUF shard tensor"); return false; }
++            }
++            total += part.tensors.size();
++            parts.push_back(std::move(part));
++        }
++        if (total != head.split_tensors()) { LOG_ERROR("GGUF split tensor count mismatch"); return false; }
++        // Publish only after the entire group validates. add_file() owns rollback.
++        for (auto& part : parts) {
++            if (part.path != file_path) parsed_dependencies_.push_back(part.stamp);
++            const size_t index = add_file_path(part.path);
++            for (auto& tensor : part.tensors) {
++                if (!starts_with(tensor.name, prefix)) tensor.name = prefix + tensor.name;
++                tensor.file_index = index;
++                add_tensor_storage(tensor);
++            }
++        }
++        return true;
++    }
++#endif
++
+     std::vector<TensorStorage> tensor_storages;
+     std::string error;
+     if (!read_gguf_file(file_path, tensor_storages, &error)) {
+@@ -321,12 +374,24 @@ bool ModelLoader::init_from_safetensors_index_file(const std::string& file_path,
+         return false;
+     }
+ 
++    std::set<std::string> group_tensor_names;
+     for (const std::string& shard_path : shard_paths) {
++        // An index references safetensors files, not another index/directory.
++        // Never recurse through a model-controlled index graph.
++        if (!is_safetensors_file(shard_path)) {
++            LOG_ERROR("Index companion is not a safetensors file: '%s'", shard_path.c_str());
++            return false;
++        }
+         if (!parse_file(shard_path, prefix)) {
+             return false;
+         }
+     }
+ 
++    for (const std::string& shard_path : shard_paths) {
++        for (const auto& name : parsed_tensor_names_[shard_path]) {
++            if (!group_tensor_names.insert(name).second) { LOG_ERROR("Duplicate safetensors shard tensor"); return false; }
++        }
++    }
+     std::ifstream index_file(file_path);
+     const auto index = nlohmann::json::parse(index_file);
+     for (const auto& entry : index.at("weight_map").items()) {

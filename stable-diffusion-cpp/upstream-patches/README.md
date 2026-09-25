@@ -25,6 +25,12 @@ llama.cpp checkout is used only as a source for its `ggml/` subtree.
    This avoids libc++ buffer invalidation without loosening bounds or loading
    tensor payloads. Remove when upstream provides an equivalent buffered reader.
 
+6. Repository-native file I/O: preserve 64-bit safetensors sizes/positions;
+   bound and validate header/index JSON, tensor ranges, and local sibling paths.
+   Resolve and validate complete standard GGUF shard groups without concatenating
+   or rewriting the original files. Duplicate/missing tensors and inconsistent
+   shard metadata fail closed. This patch does not add application model recipes.
+
 The smoke fixture reports byte ranges and total bytes rather than guessing from
 read-call counts. Its 4 KiB chunk / 256 KiB total budget applies only to the tiny
 synthetic fixture; it is not a metadata or model size limit in the core. Runtime

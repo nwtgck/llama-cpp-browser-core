@@ -8,6 +8,10 @@
 #include <stdexcept>
 #include <vector>
 extern "C" uint32_t sdc_abi_version();
+extern "C" uint32_t sdc_model_io_capabilities();
+extern "C" uint64_t sdc_test_safetensors_offset(const char*);
+extern "C" uint32_t sdc_test_safetensors_value(const char*);
+extern "C" uint32_t sdc_test_model_tensor_count(const char*);
 extern "C" void sdc_sd_ctx_params_init(uint64_t);
 extern "C" void sdc_sd_img_gen_params_init(uint64_t);
 extern "C" uint64_t sdc_test_gguf_offset(const char*);
@@ -43,9 +47,70 @@ static uint64_t sparse_gguf(const char* path, uint32_t gib, uint32_t version) {
     out.seekp(static_cast<std::streamoff>(offset));u32(out,0x3f800000); // float32 1.0
     out.close(); return offset;
 }
+
+static uint64_t sparse_safetensors(const char* path, uint64_t gap) {
+    const std::string header = "{\"padding\":{\"dtype\":\"U8\",\"shape\":[" + std::to_string(gap) +
+      "],\"data_offsets\":[0," + std::to_string(gap) + "]},\"weight\":{\"dtype\":\"F32\",\"shape\":[1],\"data_offsets\":[" +
+      std::to_string(gap) + "," + std::to_string(gap+4) + "]}}";
+    std::ofstream out(path, std::ios::binary); u64(out,header.size());out.write(header.data(),header.size());
+    const uint64_t offset=8+header.size()+gap;
+    out.seekp(static_cast<std::streamoff>(offset));u32(out,0x3f800000);out.close();return offset;
+}
+static void gguf_shard(const char* path, int index, const std::string& name, int total=2) {
+    std::ofstream out(path,std::ios::binary);
+    u32(out,0x46554747);u32(out,3);u64(out,1);u64(out,3);
+    str(out,"split.no");u32(out,2);out.put(char(index));out.put(0);
+    str(out,"split.count");u32(out,2);out.put(2);out.put(0);
+    str(out,"split.tensors.count");u32(out,5);u32(out,total);
+    str(out,name);u32(out,1);u64(out,1);u32(out,0);u64(out,0);
+    out.seekp((static_cast<std::streamoff>(out.tellp())+31)/32*32);u32(out,0x3f800000);
+}
+static void model_io_checks() {
+    check(sdc_model_io_capabilities()==3,"file capability bits");
+    for(uint64_t gib : {0ULL,2ULL,4ULL,8ULL,20ULL}) {
+        const char* file="sparse.safetensors";
+        const uint64_t offset=sparse_safetensors(file,gib<<30);
+        check(sdc_test_safetensors_offset(file)==offset,"safetensors 64-bit offsets");
+        check(sdc_test_safetensors_value(file)==0x3f800000,"safetensors sparse payload");
+        std::remove(file);std::printf("safetensors offset=%llu: passed\n",(unsigned long long)offset);
+    }
+    const char* first="parts-00001-of-00002.gguf";const char* second="parts-00002-of-00002.gguf";
+    gguf_shard(first,0,"weight1");gguf_shard(second,1,"weight2");
+    check(sdc_test_model_tensor_count(first)==2,"complete GGUF group");
+    check(sdc_test_model_tensor_count(second)==2,"GGUF group from second shard");
+    gguf_shard(second,1,"weight1");check(sdc_test_model_tensor_count(first)==0,"duplicate GGUF tensors");
+    gguf_shard(second,0,"weight2");check(sdc_test_model_tensor_count(first)==0,"wrong GGUF shard number");
+    gguf_shard(second,1,"weight2",3);check(sdc_test_model_tensor_count(first)==0,"inconsistent GGUF tensor total");
+    std::remove(second);check(sdc_test_model_tensor_count(first)==0,"missing GGUF shard");std::remove(first);
+    for(const std::string& header : {
+        "{\"weight\":{\"dtype\":\"F32\",\"shape\":[1],\"data_offsets\":[0,4]},\"weight\":{\"dtype\":\"F32\",\"shape\":[1],\"data_offsets\":[0,4]}}",
+        "{\"weight\":{\"dtype\":\"F32\",\"shape\":[1],\"data_offsets\":[0,8]}}",
+        "{\"weight\":{\"dtype\":\"F32\",\"shape\":[1],\"data_offsets\":[1,4]}}",
+        "{\"weight\":{\"dtype\":\"F32\",\"shape\":[1],\"data_offsets\":[-1,4]}}"}) {
+        const char* file="bad.safetensors";std::ofstream out(file,std::ios::binary);u64(out,header.size());out.write(header.data(),header.size());u32(out,0);out.close();
+        check(sdc_test_safetensors_offset(file)==UINT64_MAX,"invalid safetensors header");std::remove(file);
+    }
+    for(const std::string& reference : {"../escape.safetensors","/escape.safetensors","sub/../escape.safetensors","C:/escape.safetensors"}) {
+        std::ofstream out("model.safetensors.index.json");out<<"{\"weight_map\":{\"weight\":\""<<reference<<"\"}}";out.close();
+        check(sdc_test_model_tensor_count("model.safetensors.index.json")==0,"unsafe index path");std::remove("model.safetensors.index.json");
+    }
+    sparse_safetensors("tensor.safetensors",0);
+    {std::ofstream out("model.safetensors.index.json");out<<"{\"weight_map\":{\"weight\":\"tensor.safetensors\"}}";}
+    check(sdc_test_model_tensor_count("model.safetensors.index.json")==1,"safetensors index reads local shard");
+    {std::ofstream out("loop.index.json");out<<"{\"weight_map\":{\"weight\":\"model.safetensors.index.json\"}}";}
+    check(sdc_test_model_tensor_count("loop.index.json")==0,"index recursion must be rejected");
+    std::remove("loop.index.json");
+    sparse_safetensors("duplicate.safetensors",0);
+    {std::ofstream out("model.safetensors.index.json");out<<"{\"weight_map\":{\"weight\":\"tensor.safetensors\",\"other\":\"duplicate.safetensors\"}}";}
+    check(sdc_test_model_tensor_count("model.safetensors.index.json")==0,"duplicate shard tensors must be rejected");
+    std::remove("duplicate.safetensors");
+    std::remove("tensor.safetensors");std::remove("model.safetensors.index.json");
+}
+
 int main() {
     try {
         check(sdc_abi_version()==2,"ABI version");
+        model_io_checks();
         sd_ctx_params_t context{};sdc_sd_ctx_params_init(uint64_t(uintptr_t(&context)));
         sd_ctx_params_t reference{};sd_ctx_params_init(&reference);
         check(context.n_threads==reference.n_threads && context.enable_mmap==reference.enable_mmap &&

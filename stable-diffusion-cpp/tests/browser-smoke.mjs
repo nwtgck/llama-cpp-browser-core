@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { makeFixture } from './gguf-fixture.mjs';
+import { makeModelIoFixtures } from './model-io-fixtures.mjs';
 import { pathToFileURL } from 'node:url';
 const root = path.resolve(process.argv[2] ?? 'dist/package');
 const { chromium } = await import(pathToFileURL(path.resolve('../.tools/browser/node_modules/playwright/index.mjs')).href);
@@ -27,7 +28,7 @@ try {
   for (const profile of Object.keys(profiles)) {
     for (const variant of ['browser', 'test']) {
       try {
-        const result = await page.evaluate(async ({ profile, variant, fixtureSource }) => {
+        const result = await page.evaluate(async ({ profile, variant, fixtureSource, modelIoSource }) => {
           const run = async ({ origin, base, variant, profile }) => {
             const { attachCore, schema, mountReadOnlyFile } = await import(origin + '/examples/runtime/index.mjs');
             const create = (await import(base + 'core.mjs')).default;
@@ -36,7 +37,7 @@ try {
             const module = await create({ wasmBinary: new Uint8Array(await response.arrayBuffer()),
               locateFile(name) { if (name !== 'core.wasm') throw Error('Unexpected side file'); return base + name; },
             });
-            if (module._sdc_abi_version() !== 2 || module._sdb_load !== undefined) throw Error('Wrong public surface');
+            if (module._sdc_abi_version() !== 2 || module._sdc_model_io_capabilities() !== 3 || module._sdb_load !== undefined) throw Error('Wrong public surface');
             const core = attachCore(module, schema, { suspension: profile.endsWith('asyncify') ? 'asyncify' : 'direct' });
             if (core.pointerBytes !== (profile.includes('wasm64') ? 8 : 4)) throw Error('Wrong address width');
             const params = core.allocRecord('sd_img_gen_params_t');
@@ -72,6 +73,22 @@ try {
                 throw Error(`${profile}/${variant}: ${String(error)}; read trace: ${JSON.stringify(fixture.summary())}`);
               } finally { mounted.remove(); }
             }
+            const modelIoReads = [];
+            for (const gib of [0, 4, 20]) {
+              const fixture = makeModelIoFixtures(gib);
+              const mounted = [fixture.safetensors, ...fixture.shards].map(file => mountReadOnlyFile(core, file.path, file.source, { maxChunkBytes: 65536 }));
+              const pointer = core.utf8(fixture.safetensors.path), shard = core.utf8(fixture.shards[0].path);
+              try {
+                if (variant === 'test') {
+                  const arg = value => core.pointerBytes === 8 ? value : Number(value);
+                  if (module._sdc_test_safetensors_offset(arg(pointer)) !== BigInt(fixture.safetensors.offset) || module._sdc_test_safetensors_value(arg(pointer)) !== 0x3f800000) throw Error('Native safetensors file offset/payload mismatch');
+                  if (module._sdc_test_model_tensor_count(arg(shard)) !== 2) throw Error('Native GGUF shard assembly failed');
+                  mounted.pop().remove();
+                  if (module._sdc_test_model_tensor_count(arg(shard)) !== 0) throw Error('Incomplete GGUF group was accepted');
+                }
+                modelIoReads.push(fixture.safetensors.summary());
+              } finally { core.free(pointer); core.free(shard); for (const file of mounted.reverse()) file.remove(); }
+            }
             const logs = [], progress = [];
             const log = module.addFunction((level, text, data) => logs.push([level, core.readUtf8(BigInt(text)), Number(data)]), 'vipp');
             const update = module.addFunction((step, steps, time, data) => progress.push([step, steps, time, Number(data)]), 'viifp');
@@ -92,9 +109,9 @@ try {
               await core.api.sd_set_progress_callback(0n, 0n);
               module.removeFunction(log); module.removeFunction(update);
             }
-            return { passed: true, reads, scope: 'real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB; no model/GPU inference' };
+            return { passed: true, reads, modelIoReads, scope: 'real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB, safetensors >20 GiB and GGUF shards (native probes in test variants); no model/GPU inference' };
           };
-          const source = `const makeFixture = ${fixtureSource}; const run = ${run.toString()}; onmessage = async ({ data }) => { try { postMessage({ result: await run(data) }); } catch (error) { postMessage({ error: String(error.stack || error) }); } };`;
+          const source = `const makeFixture = ${fixtureSource}; const makeModelIoFixtures = ${modelIoSource}; const run = ${run.toString()}; onmessage = async ({ data }) => { try { postMessage({ result: await run(data) }); } catch (error) { postMessage({ error: String(error.stack || error) }); } };`;
           const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
           const worker = new Worker(url, { type: 'module' });
           let timer;
@@ -108,7 +125,7 @@ try {
           } finally {
             clearTimeout(timer); worker.terminate(); URL.revokeObjectURL(url);
           }
-        }, { profile, variant, fixtureSource: makeFixture.toString() });
+        }, { profile, variant, fixtureSource: makeFixture.toString(), modelIoSource: makeModelIoFixtures.toString() });
         console.log(JSON.stringify(result, null, 2));
         const file = path.resolve('build', profile, variant, 'provenance.json');
         const provenance = JSON.parse(await readFile(file, 'utf8'));

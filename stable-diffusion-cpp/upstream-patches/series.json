@@ -70,6 +70,28 @@
           "afterSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0"
         }
       ]
+    },
+    {
+      "file": "0006-browser-safetensors-and-gguf-shards.patch",
+      "target": "stable-diffusion",
+      "reason": "Keep safetensors file positions 64-bit, bound/validate metadata and local shard paths, and load complete standard GGUF shard groups without file conversion.",
+      "files": [
+        {
+          "path": "src/model_io/gguf_reader_ext.h",
+          "beforeSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0",
+          "afterSha256": "44a13228496d3a8dac3b24807e065ec9479bcb4d23a3442e542101cbc2fc20fb"
+        },
+        {
+          "path": "src/model_io/safetensors_io.cpp",
+          "beforeSha256": "4b59c25d2f2f044d947ff06fee3f8be3cdf1158c3578739b5d9ece163eb50626",
+          "afterSha256": "293d3993365f3aa2260f719ae57e5e15a6037525dbc9c20c6aba3b49b3409728"
+        },
+        {
+          "path": "src/model_loader.cpp",
+          "beforeSha256": "eb8db6b06769bffbcf15f16dc7d0e449694a7645a66f945dfdc0e7c67440af8d",
+          "afterSha256": "cc28beef610c2b9e7804e659514515397a7e724c31fcfea52bd6baee5517279a"
+        }
+      ]
     }
   ]
 }

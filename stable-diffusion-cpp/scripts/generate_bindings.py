@@ -122,7 +122,8 @@ def generate(source: Path, output: Path, compiler: str) -> dict:
            'uint64_t sdc_malloc(uint64_t size) { return (uint64_t)(uintptr_t)malloc(sdc_checked_pointer(size)); }',
            'void sdc_free(uint64_t ptr) { free((void *)sdc_checked_pointer(ptr)); }',
            'uint32_t sdc_pointer_bytes(void) { return sizeof(void *); }',
-           f'uint32_t sdc_abi_version(void) {{ return {ABI_VERSION}; }}']
+           f'uint32_t sdc_abi_version(void) {{ return {ABI_VERSION}; }}',
+           'uint32_t sdc_model_io_capabilities(void) { return 3; }']
     for f in functions:
         args, callargs, guards = [], [], []
         if f['returnKind'] == 'record':
@@ -164,7 +165,7 @@ def generate(source: Path, output: Path, compiler: str) -> dict:
     cpp += ['int64_t sdc_constant(uint32_t id) { switch(id) {']
     cpp += [f'case {i}: return (int64_t)({name});' for i,name in enumerate(constants)]
     cpp += ['default: throw std::out_of_range("constant id"); } }', '}']
-    helper_names = ['malloc','free','pointer_bytes','abi_version','sizeof_record','alignof_record','offsetof_field','sizeof_field','constant','schema_hash']
+    helper_names = ['malloc','free','pointer_bytes','abi_version','model_io_capabilities','sizeof_record','alignof_record','offsetof_field','sizeof_field','constant','schema_hash']
     exports = ['_sdc_'+n for n in helper_names] + [f['export'] for f in functions]
     # Direct exports remain available for expert callers bound to this exact native ABI.
     exports += ['_'+f['name'] for f in functions] + ['_malloc','_free']
