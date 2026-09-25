@@ -34,14 +34,14 @@ Callback registrations are upstream module-global state. Callbacks must not
 throw or re-enter a suspended native operation. The application must unregister
 callbacks before removing their function-table entries.
 
-## Single, unsplit GGUF files
+## Repository-native model files
 
 `mountReadOnlyFile(core, path, {size, read(destination, offset)})` accepts caller-
 owned synchronous random access. No Blob, OPFS, download, persistence, locking,
 or ownership policy is built into it. The source receives safe JavaScript
 integer offsets, not truncated 32-bit integers. Reads are chunked; whole files
 are not copied into JavaScript or Wasm memory. File names have no special policy
-in the core. A consumer can restrict its UI to unsharded `.gguf` files.
+in the core. The consumer controls which complete files and relative paths it mounts.
 
 The image-specific upstream patch keeps file positions in `uint64_t`, and parses
 GGUF v2/v3 metadata without accumulating the complete tensor payload in `size_t`.
@@ -56,6 +56,34 @@ have that runtime's limits. Wasm64 does not remove GPU buffer or physical-memory
 limits. Several component files (diffusion/text encoder/VAE) are not GGUF shards;
 each can be a complete unsplit GGUF. Unsupported quantization or architecture
 remains unsupported even when its file is readable.
+
+### Safetensors and already-sharded repositories
+
+`_sdc_model_io_capabilities()` is an additive ABI 2 capability query. Bit 0
+means 64-bit safetensors file positions with bounded metadata validation; bit 1
+means complete standard GGUF shard-group loading. This build returns `3`. A
+consumer must not infer these capabilities from ABI 2 alone: older ABI 2 builds
+did not contain these loader changes. The image manifest also records
+`safetensorsFileOffsetBits: 64` and `ggufShards: true`.
+
+Single safetensors files retain their original bytes, dtype and file size.
+Metadata is bounded at 100 MiB; positions and aggregate payload size use 64-bit
+integers, while each individual decoded tensor still must fit the address space.
+Duplicate keys, invalid ranges, holes/overlaps and unsafe index references are
+rejected. Index files are limited to 16 MiB and reference only local safetensors
+siblings; nested indices, traversal and duplicate shard tensors are rejected.
+
+Standard GGUF shards are resolved using their original five-digit filenames and
+`split.no`, `split.count`, `split.tensors.count`. All members and tensor identities
+are validated before the group is accepted. No file is split, concatenated or
+converted. This is a loader capability, not repository discovery: the application
+must mount every required sibling before passing the chosen component path.
+
+The upstream quantization/backend restrictions still apply (in particular,
+INT8 tensorwise/convrot is not enabled by supporting the safetensors container).
+A missing model component or unsupported operation is not repaired by changing
+file formats. Model-family detection, compatible-candidate selection, optional
+features and presets remain application responsibilities.
 
 ## Build and distribution
 
@@ -87,12 +115,15 @@ format 3. Existing llama imports are unchanged.
 Native checks use real generated bindings, sparse unsplit GGUF files whose last
 tensor starts beyond 2/4/8 GiB, actual C++ file reads, malformed metadata, callback
 registration and numerical comparison of patched normalization to upstream CPU.
+They also read sparse safetensors beyond 20 GiB and validate complete/missing/
+duplicate GGUF groups and local safetensors indices.
 Synthetic tensors are **not** a trained model or an image-generation benchmark.
 
 CI browser smoke uses real modules in dedicated Workers for all six variants:
 parameter round trips (including >2^53 seeds), caller-owned file reads, native
 GGUF indexing/reading across 4/8 GiB in test builds, and log/progress registration,
-notification and unregistration. Test-only probes are absent from browser
+notification and unregistration. Additional test-variant probes exercise
+safetensors beyond 20 GiB and complete/missing GGUF shard groups. Test-only probes are absent from browser
 artifacts. The fixture never allocates a multi-gigabyte JavaScript array.
 
 These tests do not request a GPU device or prove real-model image inference.

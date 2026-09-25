@@ -6,9 +6,11 @@
   "capabilities": {
     "ggufFileOffsetBits": 64,
     "callerOwnedRandomAccess": true,
-    "upstreamApi": true
+    "upstreamApi": true,
+    "safetensorsFileOffsetBits": 64,
+    "ggufShards": true
   },
-  "sourceCommit": "1a354989ff799210eaf3b14c26970ada4cf3cbfc",
+  "sourceCommit": "e9b0620fd46b362af3693723425c90aa32587d22",
   "upstreams": {
     "stable-diffusion": {
       "path": "vendor/stable-diffusion.cpp",
@@ -29,7 +31,7 @@
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm32-asyncify",
           "variant": "browser",
-          "sourceCommit": "1a354989ff799210eaf3b14c26970ada4cf3cbfc",
+          "sourceCommit": "e9b0620fd46b362af3693723425c90aa32587d22",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -89,7 +91,7 @@
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "d1ae2ca50df40734cf4100939eb04148e4a26c154c984dc4b2fed94513b9b5f9",
+            "inventorySha256": "43d5d0f03487a795db534f9fac99bf85daba352ac1dcac9f7485a841d2f38665",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -165,11 +167,34 @@
                   }
                 ],
                 "sha256": "ce64c95fb7edcae2603e108a4fb0f35e0f32d3a3d5121828b38394d0e66b1780"
+              },
+              {
+                "file": "0006-browser-safetensors-and-gguf-shards.patch",
+                "target": "stable-diffusion",
+                "reason": "Keep safetensors file positions 64-bit, bound/validate metadata and local shard paths, and load complete standard GGUF shard groups without file conversion.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0",
+                    "afterSha256": "44a13228496d3a8dac3b24807e065ec9479bcb4d23a3442e542101cbc2fc20fb"
+                  },
+                  {
+                    "path": "src/model_io/safetensors_io.cpp",
+                    "beforeSha256": "4b59c25d2f2f044d947ff06fee3f8be3cdf1158c3578739b5d9ece163eb50626",
+                    "afterSha256": "293d3993365f3aa2260f719ae57e5e15a6037525dbc9c20c6aba3b49b3409728"
+                  },
+                  {
+                    "path": "src/model_loader.cpp",
+                    "beforeSha256": "eb8db6b06769bffbcf15f16dc7d0e449694a7645a66f945dfdc0e7c67440af8d",
+                    "afterSha256": "cc28beef610c2b9e7804e659514515397a7e724c31fcfea52bd6baee5517279a"
+                  }
+                ],
+                "sha256": "1aff9d568160b9385703363485da84e4178367403682025b4830986005f76b02"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790264950,
+          "builtAtUnix": 1790309365,
           "buildCache": {
             "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
@@ -178,14 +203,14 @@
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB; no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB, safetensors >20 GiB and GGUF shards (native probes in test variants); no model/GPU inference"
           }
         },
         "test": {
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm32-asyncify",
           "variant": "test",
-          "sourceCommit": "1a354989ff799210eaf3b14c26970ada4cf3cbfc",
+          "sourceCommit": "e9b0620fd46b362af3693723425c90aa32587d22",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -245,7 +270,7 @@
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "d1ae2ca50df40734cf4100939eb04148e4a26c154c984dc4b2fed94513b9b5f9",
+            "inventorySha256": "43d5d0f03487a795db534f9fac99bf85daba352ac1dcac9f7485a841d2f38665",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -321,11 +346,34 @@
                   }
                 ],
                 "sha256": "ce64c95fb7edcae2603e108a4fb0f35e0f32d3a3d5121828b38394d0e66b1780"
+              },
+              {
+                "file": "0006-browser-safetensors-and-gguf-shards.patch",
+                "target": "stable-diffusion",
+                "reason": "Keep safetensors file positions 64-bit, bound/validate metadata and local shard paths, and load complete standard GGUF shard groups without file conversion.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0",
+                    "afterSha256": "44a13228496d3a8dac3b24807e065ec9479bcb4d23a3442e542101cbc2fc20fb"
+                  },
+                  {
+                    "path": "src/model_io/safetensors_io.cpp",
+                    "beforeSha256": "4b59c25d2f2f044d947ff06fee3f8be3cdf1158c3578739b5d9ece163eb50626",
+                    "afterSha256": "293d3993365f3aa2260f719ae57e5e15a6037525dbc9c20c6aba3b49b3409728"
+                  },
+                  {
+                    "path": "src/model_loader.cpp",
+                    "beforeSha256": "eb8db6b06769bffbcf15f16dc7d0e449694a7645a66f945dfdc0e7c67440af8d",
+                    "afterSha256": "cc28beef610c2b9e7804e659514515397a7e724c31fcfea52bd6baee5517279a"
+                  }
+                ],
+                "sha256": "1aff9d568160b9385703363485da84e4178367403682025b4830986005f76b02"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790264953,
+          "builtAtUnix": 1790309367,
           "buildCache": {
             "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
@@ -334,7 +382,7 @@
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB; no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB, safetensors >20 GiB and GGUF shards (native probes in test variants); no model/GPU inference"
           }
         }
       }
@@ -345,7 +393,7 @@
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm32-jspi",
           "variant": "browser",
-          "sourceCommit": "1a354989ff799210eaf3b14c26970ada4cf3cbfc",
+          "sourceCommit": "e9b0620fd46b362af3693723425c90aa32587d22",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -405,7 +453,7 @@
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "d1ae2ca50df40734cf4100939eb04148e4a26c154c984dc4b2fed94513b9b5f9",
+            "inventorySha256": "43d5d0f03487a795db534f9fac99bf85daba352ac1dcac9f7485a841d2f38665",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -481,11 +529,34 @@
                   }
                 ],
                 "sha256": "ce64c95fb7edcae2603e108a4fb0f35e0f32d3a3d5121828b38394d0e66b1780"
+              },
+              {
+                "file": "0006-browser-safetensors-and-gguf-shards.patch",
+                "target": "stable-diffusion",
+                "reason": "Keep safetensors file positions 64-bit, bound/validate metadata and local shard paths, and load complete standard GGUF shard groups without file conversion.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0",
+                    "afterSha256": "44a13228496d3a8dac3b24807e065ec9479bcb4d23a3442e542101cbc2fc20fb"
+                  },
+                  {
+                    "path": "src/model_io/safetensors_io.cpp",
+                    "beforeSha256": "4b59c25d2f2f044d947ff06fee3f8be3cdf1158c3578739b5d9ece163eb50626",
+                    "afterSha256": "293d3993365f3aa2260f719ae57e5e15a6037525dbc9c20c6aba3b49b3409728"
+                  },
+                  {
+                    "path": "src/model_loader.cpp",
+                    "beforeSha256": "eb8db6b06769bffbcf15f16dc7d0e449694a7645a66f945dfdc0e7c67440af8d",
+                    "afterSha256": "cc28beef610c2b9e7804e659514515397a7e724c31fcfea52bd6baee5517279a"
+                  }
+                ],
+                "sha256": "1aff9d568160b9385703363485da84e4178367403682025b4830986005f76b02"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790264814,
+          "builtAtUnix": 1790309355,
           "buildCache": {
             "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
@@ -494,14 +565,14 @@
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB; no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB, safetensors >20 GiB and GGUF shards (native probes in test variants); no model/GPU inference"
           }
         },
         "test": {
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm32-jspi",
           "variant": "test",
-          "sourceCommit": "1a354989ff799210eaf3b14c26970ada4cf3cbfc",
+          "sourceCommit": "e9b0620fd46b362af3693723425c90aa32587d22",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -561,7 +632,7 @@
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "d1ae2ca50df40734cf4100939eb04148e4a26c154c984dc4b2fed94513b9b5f9",
+            "inventorySha256": "43d5d0f03487a795db534f9fac99bf85daba352ac1dcac9f7485a841d2f38665",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -637,11 +708,34 @@
                   }
                 ],
                 "sha256": "ce64c95fb7edcae2603e108a4fb0f35e0f32d3a3d5121828b38394d0e66b1780"
+              },
+              {
+                "file": "0006-browser-safetensors-and-gguf-shards.patch",
+                "target": "stable-diffusion",
+                "reason": "Keep safetensors file positions 64-bit, bound/validate metadata and local shard paths, and load complete standard GGUF shard groups without file conversion.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0",
+                    "afterSha256": "44a13228496d3a8dac3b24807e065ec9479bcb4d23a3442e542101cbc2fc20fb"
+                  },
+                  {
+                    "path": "src/model_io/safetensors_io.cpp",
+                    "beforeSha256": "4b59c25d2f2f044d947ff06fee3f8be3cdf1158c3578739b5d9ece163eb50626",
+                    "afterSha256": "293d3993365f3aa2260f719ae57e5e15a6037525dbc9c20c6aba3b49b3409728"
+                  },
+                  {
+                    "path": "src/model_loader.cpp",
+                    "beforeSha256": "eb8db6b06769bffbcf15f16dc7d0e449694a7645a66f945dfdc0e7c67440af8d",
+                    "afterSha256": "cc28beef610c2b9e7804e659514515397a7e724c31fcfea52bd6baee5517279a"
+                  }
+                ],
+                "sha256": "1aff9d568160b9385703363485da84e4178367403682025b4830986005f76b02"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790264847,
+          "builtAtUnix": 1790309331,
           "buildCache": {
             "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
@@ -650,7 +744,7 @@
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB; no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB, safetensors >20 GiB and GGUF shards (native probes in test variants); no model/GPU inference"
           }
         }
       }
@@ -661,7 +755,7 @@
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm64-jspi",
           "variant": "browser",
-          "sourceCommit": "1a354989ff799210eaf3b14c26970ada4cf3cbfc",
+          "sourceCommit": "e9b0620fd46b362af3693723425c90aa32587d22",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -721,7 +815,7 @@
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "d1ae2ca50df40734cf4100939eb04148e4a26c154c984dc4b2fed94513b9b5f9",
+            "inventorySha256": "43d5d0f03487a795db534f9fac99bf85daba352ac1dcac9f7485a841d2f38665",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -797,11 +891,34 @@
                   }
                 ],
                 "sha256": "ce64c95fb7edcae2603e108a4fb0f35e0f32d3a3d5121828b38394d0e66b1780"
+              },
+              {
+                "file": "0006-browser-safetensors-and-gguf-shards.patch",
+                "target": "stable-diffusion",
+                "reason": "Keep safetensors file positions 64-bit, bound/validate metadata and local shard paths, and load complete standard GGUF shard groups without file conversion.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0",
+                    "afterSha256": "44a13228496d3a8dac3b24807e065ec9479bcb4d23a3442e542101cbc2fc20fb"
+                  },
+                  {
+                    "path": "src/model_io/safetensors_io.cpp",
+                    "beforeSha256": "4b59c25d2f2f044d947ff06fee3f8be3cdf1158c3578739b5d9ece163eb50626",
+                    "afterSha256": "293d3993365f3aa2260f719ae57e5e15a6037525dbc9c20c6aba3b49b3409728"
+                  },
+                  {
+                    "path": "src/model_loader.cpp",
+                    "beforeSha256": "eb8db6b06769bffbcf15f16dc7d0e449694a7645a66f945dfdc0e7c67440af8d",
+                    "afterSha256": "cc28beef610c2b9e7804e659514515397a7e724c31fcfea52bd6baee5517279a"
+                  }
+                ],
+                "sha256": "1aff9d568160b9385703363485da84e4178367403682025b4830986005f76b02"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790264884,
+          "builtAtUnix": 1790309384,
           "buildCache": {
             "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
@@ -810,14 +927,14 @@
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB; no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB, safetensors >20 GiB and GGUF shards (native probes in test variants); no model/GPU inference"
           }
         },
         "test": {
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm64-jspi",
           "variant": "test",
-          "sourceCommit": "1a354989ff799210eaf3b14c26970ada4cf3cbfc",
+          "sourceCommit": "e9b0620fd46b362af3693723425c90aa32587d22",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -877,7 +994,7 @@
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "d1ae2ca50df40734cf4100939eb04148e4a26c154c984dc4b2fed94513b9b5f9",
+            "inventorySha256": "43d5d0f03487a795db534f9fac99bf85daba352ac1dcac9f7485a841d2f38665",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -953,11 +1070,34 @@
                   }
                 ],
                 "sha256": "ce64c95fb7edcae2603e108a4fb0f35e0f32d3a3d5121828b38394d0e66b1780"
+              },
+              {
+                "file": "0006-browser-safetensors-and-gguf-shards.patch",
+                "target": "stable-diffusion",
+                "reason": "Keep safetensors file positions 64-bit, bound/validate metadata and local shard paths, and load complete standard GGUF shard groups without file conversion.",
+                "files": [
+                  {
+                    "path": "src/model_io/gguf_reader_ext.h",
+                    "beforeSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0",
+                    "afterSha256": "44a13228496d3a8dac3b24807e065ec9479bcb4d23a3442e542101cbc2fc20fb"
+                  },
+                  {
+                    "path": "src/model_io/safetensors_io.cpp",
+                    "beforeSha256": "4b59c25d2f2f044d947ff06fee3f8be3cdf1158c3578739b5d9ece163eb50626",
+                    "afterSha256": "293d3993365f3aa2260f719ae57e5e15a6037525dbc9c20c6aba3b49b3409728"
+                  },
+                  {
+                    "path": "src/model_loader.cpp",
+                    "beforeSha256": "eb8db6b06769bffbcf15f16dc7d0e449694a7645a66f945dfdc0e7c67440af8d",
+                    "afterSha256": "cc28beef610c2b9e7804e659514515397a7e724c31fcfea52bd6baee5517279a"
+                  }
+                ],
+                "sha256": "1aff9d568160b9385703363485da84e4178367403682025b4830986005f76b02"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790264870,
+          "builtAtUnix": 1790309404,
           "buildCache": {
             "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
@@ -966,7 +1106,7 @@
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB; no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB, safetensors >20 GiB and GGUF shards (native probes in test variants); no model/GPU inference"
           }
         }
       }
@@ -981,8 +1121,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 5915,
-      "sha256": "d81ad7f4088bcb05bce157f1d9f56bbd715d65e827eca0a138c53f8450726e6b"
+      "bytes": 7908,
+      "sha256": "8d9ed6d1ad1879ded87d3fb9169f73a8ea3e5afba4cc1d41079929cecad18329"
     },
     {
       "path": "api/functions.d.ts",
@@ -1416,93 +1556,93 @@
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/browser/core.d.ts",
-      "bytes": 1284,
-      "sha256": "6faa78a95b9fa66c5b13ca354ce335d9be5734dd5211da4d3625d63ca8da2e88"
+      "bytes": 1403,
+      "sha256": "16222528195f6ef52b7cc9d22c0ae4fd7c56c0210eed83df87ec329aa0297823"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/browser/core.mjs",
-      "bytes": 197552,
-      "sha256": "e4bbf0a084bbd50023df0b061cd9821e41fd728384f1448a339178cbf55879e8"
+      "bytes": 197661,
+      "sha256": "01a9e048d630641b77e99a9deae1d10675f5e3e2387a9edbabe7d1076aac0183"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/browser/core.wasm",
-      "bytes": 43526913,
-      "sha256": "e8693666c1d249c91481b9e0dbfe2e9019544a42a4a2c3c04089d7fb16da2e45"
+      "bytes": 43541718,
+      "sha256": "6910497a49730b84e15d479dab8454eedad5115e0184c46fc14a559a1685890b"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/test/core.d.ts",
-      "bytes": 1284,
-      "sha256": "6faa78a95b9fa66c5b13ca354ce335d9be5734dd5211da4d3625d63ca8da2e88"
+      "bytes": 1403,
+      "sha256": "16222528195f6ef52b7cc9d22c0ae4fd7c56c0210eed83df87ec329aa0297823"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/test/core.mjs",
-      "bytes": 325009,
-      "sha256": "55497486a2715de4ee9d6d924d335281e6b80069f981a6cfd9d75c5c0ce08b42"
+      "bytes": 326634,
+      "sha256": "efb253cb772be56414346950e2c8d30ed0806d30641ca336e8c5dc12bceae635"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/test/core.wasm",
-      "bytes": 43763596,
-      "sha256": "e14ee2a78a9b7a1dc864abd1a547bbae357de358c4f22d7fb2d67ff21a1c5970"
+      "bytes": 43781611,
+      "sha256": "e30a6f763832324b9509bd1dd0274e6856fdae5f78f6cc59776a599d1e727634"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/browser/core.d.ts",
-      "bytes": 1284,
-      "sha256": "6faa78a95b9fa66c5b13ca354ce335d9be5734dd5211da4d3625d63ca8da2e88"
+      "bytes": 1403,
+      "sha256": "16222528195f6ef52b7cc9d22c0ae4fd7c56c0210eed83df87ec329aa0297823"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/browser/core.mjs",
-      "bytes": 132758,
-      "sha256": "8f192cb36f6adf64a6baad30848d667fc6aaa103a9792a4341d8741498d361ff"
+      "bytes": 132890,
+      "sha256": "416fd7363cf9ca61bd8cd7f1f351dc817dd471c0b1faba0d783704c2e9755997"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/browser/core.wasm",
-      "bytes": 37723664,
-      "sha256": "f4f38006b3a10f0f81d0820f32a773e8adfe40f7b26c788f243ade8c959fe4b2"
+      "bytes": 37746619,
+      "sha256": "523ce5591d9065e2703a37f3abc427e851e06915e6db96e36de51b0431d6927b"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/test/core.d.ts",
-      "bytes": 1284,
-      "sha256": "6faa78a95b9fa66c5b13ca354ce335d9be5734dd5211da4d3625d63ca8da2e88"
+      "bytes": 1403,
+      "sha256": "16222528195f6ef52b7cc9d22c0ae4fd7c56c0210eed83df87ec329aa0297823"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/test/core.mjs",
-      "bytes": 208997,
-      "sha256": "7cd083ed27c5e625b580508c818261900e64aa4132f6aee82b2924584a0d1ff5"
+      "bytes": 210622,
+      "sha256": "dc5a7c0fcd51dd909790fd7c71f17c75509e2907abccda872373b893b87a0e61"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/test/core.wasm",
-      "bytes": 37903199,
-      "sha256": "505794536f61fa1fc616c326ad543aa4e9df114efda418a7581daeb6af6331e3"
+      "bytes": 37927582,
+      "sha256": "b64f4a20800724215e54f8ba307d67ffbd9a20547e904741b46beaf4da3a5d1c"
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/browser/core.d.ts",
-      "bytes": 1284,
-      "sha256": "6faa78a95b9fa66c5b13ca354ce335d9be5734dd5211da4d3625d63ca8da2e88"
+      "bytes": 1403,
+      "sha256": "16222528195f6ef52b7cc9d22c0ae4fd7c56c0210eed83df87ec329aa0297823"
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/browser/core.mjs",
-      "bytes": 135558,
-      "sha256": "2ba3a34bb5a05769680fe0ad7129f240ce19b817f8735aeb44ea8a0f02afd0cb"
+      "bytes": 135690,
+      "sha256": "1448efbf65a49a166db12c510672f9e9c7b4c3a2ee35a8d0161695975cb52782"
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/browser/core.wasm",
-      "bytes": 38036273,
-      "sha256": "9721460ea4cce97f05cec8fb2f7ffd71cbbfd67b6bdf1048349f83a3b9491b6d"
+      "bytes": 38060550,
+      "sha256": "e8df4223bbe4d5f35aa46ec53431da071b76fdde12fb622d4ef140a33829155d"
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/test/core.d.ts",
-      "bytes": 1284,
-      "sha256": "6faa78a95b9fa66c5b13ca354ce335d9be5734dd5211da4d3625d63ca8da2e88"
+      "bytes": 1403,
+      "sha256": "16222528195f6ef52b7cc9d22c0ae4fd7c56c0210eed83df87ec329aa0297823"
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/test/core.mjs",
-      "bytes": 212495,
-      "sha256": "bf33718dce5e42731c8a1c5524e4f6b5d17e4d0144973eb51d7eab4bd71997aa"
+      "bytes": 214120,
+      "sha256": "dee0eb7bda7472884e2c60245af0955ec91af719a3f0d6db51d3e8c978db9ea2"
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/test/core.wasm",
-      "bytes": 38225694,
-      "sha256": "c169c22253db64108c71eeb45b28f323e69b82e89a791303b50a9314b69fb4da"
+      "bytes": 38251497,
+      "sha256": "bdfb3be7d8eef340a8b79318130ea85bf8f8830d0b056aa0f64bc038b79d4d13"
     }
   ]
 }

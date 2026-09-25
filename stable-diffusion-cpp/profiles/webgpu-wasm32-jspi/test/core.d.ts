@@ -7,6 +7,8 @@ export interface StableDiffusionModule {
   removeFunction(pointer: number | bigint): void;
   ccall(name: string, result: 'number' | 'bigint' | null, types: string[], args: unknown[], options?: { async: boolean }): unknown;
   _sdc_abi_version(): number;
+  /** bit 0: 64-bit safetensors offsets; bit 1: complete GGUF shard groups. */
+  _sdc_model_io_capabilities(): number;
   _sdc_pointer_bytes(): number;
   _sdc_schema_hash(): bigint;
   _sdc_malloc(bytes: bigint): bigint;
