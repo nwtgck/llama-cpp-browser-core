@@ -1,0 +1,97 @@
+{
+  "formatVersion": 1,
+  "patches": [
+    {
+      "file": "0001-single-thread-model-reader.patch",
+      "target": "stable-diffusion",
+      "reason": "Execute the model-reader closure inline for single-threaded Emscripten, preserving native/pthread behavior.",
+      "files": [
+        {
+          "path": "src/model_loader.cpp",
+          "beforeSha256": "0648fbd54c0df589e1998c51f63218953a975621002fbd791e14f8f8adc1abf2",
+          "afterSha256": "eb8db6b06769bffbcf15f16dc7d0e449694a7645a66f945dfdc0e7c67440af8d"
+        }
+      ]
+    },
+    {
+      "file": "0002-webgpu-group-normalization.patch",
+      "target": "stable-diffusion",
+      "reason": "Lower the two group-normalization entry points to existing NORM where equivalent, with CPU reference tests.",
+      "files": [
+        {
+          "path": "src/core/ggml_extend.cpp",
+          "beforeSha256": "977e8f21083ac57aafe7e8438f8adaaf040ec0f125f6ca187609e01c3b39a8e2",
+          "afterSha256": "6c5b78a3ca84f5818e6c84f1970e18ee954e812d47211cd7a82e5271ae1ad783"
+        }
+      ]
+    },
+    {
+      "file": "0003-webgpu-unknown-memory-capacity.patch",
+      "target": "ggml",
+      "reason": "Do not misreport maxBufferSize as total/free GPU memory. Image callers must supply an explicit budget when live capacity is unknown.",
+      "files": [
+        {
+          "path": "ggml/src/ggml-webgpu/ggml-webgpu.cpp",
+          "beforeSha256": "30c099a6af5168b4a5ebabbe22a27838b9fd373bd008e70a73493ff60903537e",
+          "afterSha256": "661ac0197d0057d15c8ab39a63e5e79d98b6974c167f9f01deac978b7c29cd7a"
+        }
+      ]
+    },
+    {
+      "file": "0004-browser-gguf-64bit-file-offsets.patch",
+      "target": "stable-diffusion",
+      "reason": "Read unsplit GGUF metadata without whole-file size_t accumulation; preserve 64-bit file positions, validate metadata and leave tensor payloads lazy.",
+      "files": [
+        {
+          "path": "src/model_io/gguf_reader_ext.h",
+          "beforeSha256": "3b36d1ef883f196b5e6847ec817fd20a7146301ee6bd3a86920e86fa72715586",
+          "afterSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a"
+        },
+        {
+          "path": "src/model_io/gguf_io.cpp",
+          "beforeSha256": "976065ada0e5ab3b3d7d7581e1e853ea2f5653d0226a8e38d85ee80d35f09d55",
+          "afterSha256": "5735b65ddf5d79c2dee028f6987aaa7c346bcb565bc279274d29137fb9ee01a9"
+        },
+        {
+          "path": "src/model_io/tensor_storage.h",
+          "beforeSha256": "fb37fe9c75080e6ec9989fe178ff6c47c2e7238f85bb70d12bd7c8c472327d44",
+          "afterSha256": "f789aef10b7cbb320bc730132643bf9e31d47c8defcbe3382ed73f613a584690"
+        }
+      ]
+    },
+    {
+      "file": "0005-browser-gguf-logical-cursor.patch",
+      "target": "stable-diffusion",
+      "reason": "Keep a 64-bit logical metadata cursor; avoid tellg buffer invalidation and repeated FileReaderSync reads while retaining bounded skips and file checks.",
+      "files": [
+        {
+          "path": "src/model_io/gguf_reader_ext.h",
+          "beforeSha256": "fb779bfa4749f75b06067b1e5ac0219b8e8b30430d40dd8d7cfa323d8850787a",
+          "afterSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0"
+        }
+      ]
+    },
+    {
+      "file": "0006-browser-safetensors-and-gguf-shards.patch",
+      "target": "stable-diffusion",
+      "reason": "Keep safetensors file positions 64-bit, bound/validate metadata and local shard paths, and load complete standard GGUF shard groups without file conversion.",
+      "files": [
+        {
+          "path": "src/model_io/gguf_reader_ext.h",
+          "beforeSha256": "d552184e261430fa91a601b41c2befd566ea53aa8880a3ef24a9d116612fbfe0",
+          "afterSha256": "44a13228496d3a8dac3b24807e065ec9479bcb4d23a3442e542101cbc2fc20fb"
+        },
+        {
+          "path": "src/model_io/safetensors_io.cpp",
+          "beforeSha256": "4b59c25d2f2f044d947ff06fee3f8be3cdf1158c3578739b5d9ece163eb50626",
+          "afterSha256": "293d3993365f3aa2260f719ae57e5e15a6037525dbc9c20c6aba3b49b3409728"
+        },
+        {
+          "path": "src/model_loader.cpp",
+          "beforeSha256": "eb8db6b06769bffbcf15f16dc7d0e449694a7645a66f945dfdc0e7c67440af8d",
+          "afterSha256": "cc28beef610c2b9e7804e659514515397a7e724c31fcfea52bd6baee5517279a"
+        }
+      ]
+    }
+  ]
+}

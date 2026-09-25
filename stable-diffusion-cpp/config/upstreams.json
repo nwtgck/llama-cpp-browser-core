@@ -1,0 +1,13 @@
+{
+  "stable-diffusion": {
+    "path": "vendor/stable-diffusion.cpp",
+    "repository": "leejet/stable-diffusion.cpp",
+    "commit": "88411ef1e0688ff2df1010aeeb5d92b2d8cea2be"
+  },
+  "ggml": {
+    "path": "vendor/ggml-webgpu-source",
+    "repository": "ggml-org/llama.cpp",
+    "commit": "3057bb66c86c46d5781e50e85462a760ba7d1feb",
+    "sourceSubdirectory": "ggml"
+  }
+}

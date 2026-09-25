@@ -1,0 +1,31 @@
+--- a/src/model_loader.cpp
++++ b/src/model_loader.cpp
+@@ -1104,8 +1104,7 @@
+         std::vector<std::thread> workers;
+         std::mutex backend_tensor_set_mutex;
+ 
+-        for (int i = 0; i < n_threads; ++i) {
+-            workers.emplace_back([&, file_path, is_zip]() {
++        auto load_worker = [&, file_path, is_zip]() {
+                 std::ifstream file;
+                 zip_t* zip = nullptr;
+                 if (is_zip) {
+@@ -1312,8 +1311,16 @@
+                 if (zip != nullptr) {
+                     zip_close(zip);
+                 }
+-            });
+-        }
++        };
++#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
++        // Browser profiles have no pthreads. Even n_threads=1 must not spawn one.
++        last_n_threads = 1;
++        load_worker();
++#else
++        for (int i = 0; i < n_threads; ++i) {
++            workers.emplace_back(load_worker);
++        }
++#endif
+ 
+         while (true) {
+             size_t current_idx = tensor_idx.load();

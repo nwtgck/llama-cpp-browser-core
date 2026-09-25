@@ -1,0 +1,7 @@
+/build/
+/dist/
+/.tools/
+/node_modules/
+*.tgz
+__pycache__/
+*.pyc

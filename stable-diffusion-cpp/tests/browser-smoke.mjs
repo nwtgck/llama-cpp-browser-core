@@ -1,0 +1,146 @@
+// Real Wasm/Worker/filesystem/callback boundary tests. No model or GPU inference.
+import { createServer } from 'node:http';
+import { readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { makeFixture } from './gguf-fixture.mjs';
+import { makeModelIoFixtures } from './model-io-fixtures.mjs';
+import { pathToFileURL } from 'node:url';
+const root = path.resolve(process.argv[2] ?? 'dist/package');
+const { chromium } = await import(pathToFileURL(path.resolve('../.tools/browser/node_modules/playwright/index.mjs')).href);
+const server = createServer(async (req, res) => {
+  try {
+    const pathname = decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname);
+    if (pathname === '/') { res.setHeader('Content-Type', 'text/html'); res.end('<!doctype html><title>Image core boundary test</title>'); return; }
+    const file = path.resolve(root, '.' + pathname);
+    if (!file.startsWith(root + path.sep)) { res.writeHead(403).end(); return; }
+    res.setHeader('Content-Type', file.endsWith('.mjs') ? 'text/javascript' : file.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream');
+    res.end(await readFile(file));
+  } catch { res.writeHead(404).end(); }
+});
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+let browser;
+try {
+  browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  const profiles = JSON.parse(await readFile('config/profiles.json', 'utf8'));
+  const failures = [];
+  for (const profile of Object.keys(profiles)) {
+    for (const variant of ['browser', 'test']) {
+      try {
+        const result = await page.evaluate(async ({ profile, variant, fixtureSource, modelIoSource }) => {
+          const run = async ({ origin, base, variant, profile }) => {
+            const { attachCore, schema, mountReadOnlyFile } = await import(origin + '/examples/runtime/index.mjs');
+            const create = (await import(base + 'core.mjs')).default;
+            const response = await fetch(base + 'core.wasm');
+            if (!response.ok) throw Error('Missing Wasm');
+            const module = await create({ wasmBinary: new Uint8Array(await response.arrayBuffer()),
+              locateFile(name) { if (name !== 'core.wasm') throw Error('Unexpected side file'); return base + name; },
+            });
+            if (module._sdc_abi_version() !== 2 || module._sdc_model_io_capabilities() !== 3 || module._sdb_load !== undefined) throw Error('Wrong public surface');
+            const core = attachCore(module, schema, { suspension: profile.endsWith('asyncify') ? 'asyncify' : 'direct' });
+            if (core.pointerBytes !== (profile.includes('wasm64') ? 8 : 4)) throw Error('Wrong address width');
+            const params = core.allocRecord('sd_img_gen_params_t');
+            await core.api.sd_img_gen_params_init(params);
+            core.setField('sd_img_gen_params_t', params, 'seed', 9007199254741009n);
+            core.setField('sd_img_gen_params_t', params, 'width', 1024);
+            if (core.getField('sd_img_gen_params_t', params, 'seed') !== 9007199254741009n || core.getField('sd_img_gen_params_t', params, 'width') !== 1024) throw Error('Caller parameter roundtrip failed');
+            core.free(params);
+            module.FS.mkdir('/models');
+            const reads = [];
+            for (const gib of [0, 2, 4, 8]) {
+              const fixture = makeFixture(gib, gib === 2 ? 2 : 3);
+              const mounted = mountReadOnlyFile(core, '/models/probe.gguf', fixture.source, { maxChunkBytes: fixture.maxChunkBytes });
+              try {
+                const file = module.FS.open(mounted.path, 'r');
+                try {
+                  module.FS.llseek(file, fixture.offset, 0);
+                  const value = new Uint8Array(4);
+                  if (module.FS.read(file, value, 0, 4) !== 4 || value.join(',') !== '0,0,128,63') throw Error('FS large-offset read failed');
+                } finally { module.FS.close(file); }
+                if (variant === 'test') {
+                  const path = core.utf8(mounted.path);
+                  const pointer = core.pointerBytes === 8 ? path : Number(path);
+                  try {
+                    fixture.setPhase('native-offset');
+                    if (module._sdc_test_gguf_offset(pointer) !== BigInt(fixture.offset)) throw Error('Native GGUF offset was truncated');
+                    fixture.setPhase('native-value');
+                    if (module._sdc_test_gguf_value(pointer) !== 0x3f800000) throw Error('Native C++ large-offset read failed');
+                  } finally { core.free(path); }
+                }
+                reads.push(fixture.summary());
+              } catch (error) {
+                throw Error(`${profile}/${variant}: ${String(error)}; read trace: ${JSON.stringify(fixture.summary())}`);
+              } finally { mounted.remove(); }
+            }
+            const modelIoReads = [];
+            for (const gib of [0, 4, 20]) {
+              const fixture = makeModelIoFixtures(gib);
+              const mounted = [fixture.safetensors, ...fixture.shards].map(file => mountReadOnlyFile(core, file.path, file.source, { maxChunkBytes: 65536 }));
+              const pointer = core.utf8(fixture.safetensors.path), shard = core.utf8(fixture.shards[0].path);
+              try {
+                if (variant === 'test') {
+                  const arg = value => core.pointerBytes === 8 ? value : Number(value);
+                  if (module._sdc_test_safetensors_offset(arg(pointer)) !== BigInt(fixture.safetensors.offset) || module._sdc_test_safetensors_value(arg(pointer)) !== 0x3f800000) throw Error('Native safetensors file offset/payload mismatch');
+                  if (module._sdc_test_model_tensor_count(arg(shard)) !== 2) throw Error('Native GGUF shard assembly failed');
+                  mounted.pop().remove();
+                  if (module._sdc_test_model_tensor_count(arg(shard)) !== 0) throw Error('Incomplete GGUF group was accepted');
+                }
+                modelIoReads.push(fixture.safetensors.summary());
+              } finally { core.free(pointer); core.free(shard); for (const file of mounted.reverse()) file.remove(); }
+            }
+            const logs = [], progress = [];
+            const log = module.addFunction((level, text, data) => logs.push([level, core.readUtf8(BigInt(text)), Number(data)]), 'vipp');
+            const update = module.addFunction((step, steps, time, data) => progress.push([step, steps, time, Number(data)]), 'viifp');
+            try {
+              await core.api.sd_set_log_callback(BigInt(log), 17n);
+              await core.api.sd_set_progress_callback(BigInt(update), 19n);
+              if (variant === 'test') {
+                module._sdc_test_callbacks();
+                if (!logs.at(-1)[1].includes('native callback probe') || logs.at(-1)[2] !== 17 || JSON.stringify(progress) !== '[[1,4,0.125,19]]') throw Error('Native callback ABI mismatch');
+              } else if (module._sdc_test_callbacks !== undefined || module._sdc_test_gguf_offset !== undefined) throw Error('Test probe leaked');
+              await core.api.sd_set_log_callback(0n, 0n);
+              await core.api.sd_set_progress_callback(0n, 0n);
+              const count = logs.length + progress.length;
+              if (variant === 'test') module._sdc_test_callbacks();
+              if (count !== logs.length + progress.length) throw Error('Callback unregistration failed');
+            } finally {
+              await core.api.sd_set_log_callback(0n, 0n);
+              await core.api.sd_set_progress_callback(0n, 0n);
+              module.removeFunction(log); module.removeFunction(update);
+            }
+            return { passed: true, reads, modelIoReads, scope: 'real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB, safetensors >20 GiB and GGUF shards (native probes in test variants); no model/GPU inference' };
+          };
+          const source = `const makeFixture = ${fixtureSource}; const makeModelIoFixtures = ${modelIoSource}; const run = ${run.toString()}; onmessage = async ({ data }) => { try { postMessage({ result: await run(data) }); } catch (error) { postMessage({ error: String(error.stack || error) }); } };`;
+          const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+          const worker = new Worker(url, { type: 'module' });
+          let timer;
+          try {
+            return await new Promise((resolve, reject) => {
+              timer = setTimeout(() => reject(Error(`Worker smoke timed out: ${profile}/${variant}`)), 120000);
+              worker.onerror = event => reject(Error(event.message));
+              worker.onmessage = ({ data }) => data.error ? reject(Error(data.error)) : resolve({ profile, variant, ...data.result });
+              worker.postMessage({ origin: location.origin, base: `${location.origin}/profiles/${profile}/${variant}/`, variant, profile });
+            });
+          } finally {
+            clearTimeout(timer); worker.terminate(); URL.revokeObjectURL(url);
+          }
+        }, { profile, variant, fixtureSource: makeFixture.toString(), modelIoSource: makeModelIoFixtures.toString() });
+        console.log(JSON.stringify(result, null, 2));
+        const file = path.resolve('build', profile, variant, 'provenance.json');
+        const provenance = JSON.parse(await readFile(file, 'utf8'));
+        provenance.validation.browserSmoke = true;
+        provenance.validation.browserSmokeScope = result.scope;
+        await writeFile(file, JSON.stringify(provenance, null, 2) + '\n');
+      } catch (error) {
+        const failure = { profile, variant, passed: false, error: String(error.stack || error) };
+        failures.push(failure);
+        console.error(JSON.stringify(failure, null, 2));
+      }
+    }
+  }
+  if (failures.length) throw new Error(`${failures.length} image browser smoke configuration(s) failed; see per-profile diagnostics`);
+} finally {
+  await browser?.close();
+  await new Promise(resolve => server.close(resolve));
+}

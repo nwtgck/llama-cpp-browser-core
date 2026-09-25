@@ -2,6 +2,13 @@
 /dist/
 /.tools/
 /node_modules/
+/llama-cpp/build/
+/llama-cpp/dist/
+/llama-cpp/.tools/
+/llama-cpp/node_modules/
+/stable-diffusion-cpp/build/
+/stable-diffusion-cpp/dist/
 *.tgz
 __pycache__/
 *.pyc
+/.cache/
