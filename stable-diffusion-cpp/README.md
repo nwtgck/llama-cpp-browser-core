@@ -116,18 +116,46 @@ Native checks use real generated bindings, sparse unsplit GGUF files whose last
 tensor starts beyond 2/4/8 GiB, actual C++ file reads, malformed metadata, callback
 registration and numerical comparison of patched normalization to upstream CPU.
 They also read sparse safetensors beyond 20 GiB and validate complete/missing/
-duplicate GGUF groups and local safetensors indices.
+duplicate GGUF groups and local safetensors indices, plus the Qwen timestep
+allocation/arithmetic regression described below.
 Synthetic tensors are **not** a trained model or an image-generation benchmark.
 
 CI browser smoke uses real modules in dedicated Workers for all six variants:
 parameter round trips (including >2^53 seeds), caller-owned file reads, native
 GGUF indexing/reading across 4/8 GiB in test builds, and log/progress registration,
 notification and unregistration. Additional test-variant probes exercise
-safetensors beyond 20 GiB and complete/missing GGUF shard groups. Test-only probes are absent from browser
+safetensors beyond 20 GiB, complete/missing GGUF shard groups, and a tiny
+synthetic CPU Qwen timestep graph. Test-only probes are absent from browser
 artifacts. The fixture never allocates a multi-gigabyte JavaScript array.
 
-These tests do not request a GPU device or prove real-model image inference.
+Default smoke does not request a GPU device. The optional WebGPU timestep
+check below is still synthetic, not real-model image inference.
 `validation.realModelInference` stays false. Model/operator/dispatch limits,
 precision, peak memory, repeated generations and performance require actual
 browser/model validation. Exposed APIs are not claims that every feature has
 been verified. Initial application trials should use a small model and output.
+
+## Qwen timestep / mixed-backend regression
+
+`upstream-patches/0007-webgpu-qwen-timestep-out-of-place.patch` fixes the
+browser build's Qwen timestep SiLU output allocation. In Qwen Image 2.1 the
+first BF16 linear can execute on CPU and its supported activation on WebGPU.
+Copying `src[0]` across backends does not make an in-place CPU `view_src` a GPU
+buffer. The activation therefore uses its own result allocation; the formula,
+weights, quantization, sampling options and backend preferences are unchanged.
+Non-browser upstream builds retain the original in-place path.
+
+`tests/qwen-timestep-probe.cpp` builds the actual, bias-free Qwen timestep block
+with tiny synthetic identity weights (first linear BF16, second linear F16).
+Native checks and browser smoke **test variants** assert the absence of the
+unsafe alias and compare CPU results with the SiLU formula. To additionally run
+the mixed-backend placement and numerical check on a WebGPU-capable host, set
+`SDCB_TEST_WEBGPU=1` when running `tests/browser-smoke.mjs` against the freshly
+packaged runtime. This opt-in fails rather than silently skipping an unavailable
+GPU; ordinary smoke does not require one. The suspending test export is absent
+from browser variants and does not change the public application API.
+
+These are bounded synthetic graph checks, not a claim that full Qwen model
+inference or image quality was validated on every browser/device. A source-only
+patch does not update an installed Wasm: rebuild/publish through the existing
+source-bound artifact workflow, then update the application's artifact pin.

@@ -10,7 +10,7 @@
     "safetensorsFileOffsetBits": 64,
     "ggufShards": true
   },
-  "sourceCommit": "d9566c7f8d89fe1e2b71e65aab0e82c523b67a25",
+  "sourceCommit": "473ed681c49fb6790f74087cea42ddf92aad5b1e",
   "upstreams": {
     "stable-diffusion": {
       "path": "vendor/stable-diffusion.cpp",
@@ -31,7 +31,7 @@
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm32-asyncify",
           "variant": "browser",
-          "sourceCommit": "d9566c7f8d89fe1e2b71e65aab0e82c523b67a25",
+          "sourceCommit": "473ed681c49fb6790f74087cea42ddf92aad5b1e",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -91,7 +91,7 @@
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "43d5d0f03487a795db534f9fac99bf85daba352ac1dcac9f7485a841d2f38665",
+            "inventorySha256": "b51ef07f9d4cd2f9a120832d69a5b2c8260f7449f935de0ee6ebdc84845a1936",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -190,11 +190,24 @@
                   }
                 ],
                 "sha256": "1aff9d568160b9385703363485da84e4178367403682025b4830986005f76b02"
+              },
+              {
+                "file": "0007-webgpu-qwen-timestep-out-of-place.patch",
+                "target": "stable-diffusion",
+                "reason": "Avoid an in-place Qwen timestep SiLU alias across a BF16 CPU matmul / WebGPU activation boundary. Preserve weights and arithmetic; no profile fallback or dtype conversion.",
+                "files": [
+                  {
+                    "path": "src/model/diffusion/qwen_image.hpp",
+                    "beforeSha256": "f0dde13ce1a7f77f843809a3d2e26d7a0b79d458c9dc80a5dc4bc3d1e72b0018",
+                    "afterSha256": "142a74a167d82a8852fc7af5cc12276c7efe624f311fdd161264bafdf89756ea"
+                  }
+                ],
+                "sha256": "790eaf137a194bd66b7049cb9e8cce6ef912c91bde2fb19ac238b042ff2c1e85"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790343845,
+          "builtAtUnix": 1790383284,
           "buildCache": {
             "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
@@ -203,14 +216,14 @@
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB, safetensors >20 GiB and GGUF shards (native probes in test variants); no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, sparse GGUF/safetensors/shard I/O; test variants also check synthetic Qwen BF16 timestep graph arithmetic on CPU (no GPU inference); no trained-model image generation"
           }
         },
         "test": {
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm32-asyncify",
           "variant": "test",
-          "sourceCommit": "d9566c7f8d89fe1e2b71e65aab0e82c523b67a25",
+          "sourceCommit": "473ed681c49fb6790f74087cea42ddf92aad5b1e",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -270,7 +283,7 @@
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "43d5d0f03487a795db534f9fac99bf85daba352ac1dcac9f7485a841d2f38665",
+            "inventorySha256": "b51ef07f9d4cd2f9a120832d69a5b2c8260f7449f935de0ee6ebdc84845a1936",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -369,11 +382,24 @@
                   }
                 ],
                 "sha256": "1aff9d568160b9385703363485da84e4178367403682025b4830986005f76b02"
+              },
+              {
+                "file": "0007-webgpu-qwen-timestep-out-of-place.patch",
+                "target": "stable-diffusion",
+                "reason": "Avoid an in-place Qwen timestep SiLU alias across a BF16 CPU matmul / WebGPU activation boundary. Preserve weights and arithmetic; no profile fallback or dtype conversion.",
+                "files": [
+                  {
+                    "path": "src/model/diffusion/qwen_image.hpp",
+                    "beforeSha256": "f0dde13ce1a7f77f843809a3d2e26d7a0b79d458c9dc80a5dc4bc3d1e72b0018",
+                    "afterSha256": "142a74a167d82a8852fc7af5cc12276c7efe624f311fdd161264bafdf89756ea"
+                  }
+                ],
+                "sha256": "790eaf137a194bd66b7049cb9e8cce6ef912c91bde2fb19ac238b042ff2c1e85"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790343709,
+          "builtAtUnix": 1790383236,
           "buildCache": {
             "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
@@ -382,7 +408,7 @@
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB, safetensors >20 GiB and GGUF shards (native probes in test variants); no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, sparse GGUF/safetensors/shard I/O; test variants also check synthetic Qwen BF16 timestep graph arithmetic on CPU (no GPU inference); no trained-model image generation"
           }
         }
       }
@@ -393,7 +419,7 @@
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm32-jspi",
           "variant": "browser",
-          "sourceCommit": "d9566c7f8d89fe1e2b71e65aab0e82c523b67a25",
+          "sourceCommit": "473ed681c49fb6790f74087cea42ddf92aad5b1e",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -453,7 +479,7 @@
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "43d5d0f03487a795db534f9fac99bf85daba352ac1dcac9f7485a841d2f38665",
+            "inventorySha256": "b51ef07f9d4cd2f9a120832d69a5b2c8260f7449f935de0ee6ebdc84845a1936",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -552,11 +578,24 @@
                   }
                 ],
                 "sha256": "1aff9d568160b9385703363485da84e4178367403682025b4830986005f76b02"
+              },
+              {
+                "file": "0007-webgpu-qwen-timestep-out-of-place.patch",
+                "target": "stable-diffusion",
+                "reason": "Avoid an in-place Qwen timestep SiLU alias across a BF16 CPU matmul / WebGPU activation boundary. Preserve weights and arithmetic; no profile fallback or dtype conversion.",
+                "files": [
+                  {
+                    "path": "src/model/diffusion/qwen_image.hpp",
+                    "beforeSha256": "f0dde13ce1a7f77f843809a3d2e26d7a0b79d458c9dc80a5dc4bc3d1e72b0018",
+                    "afterSha256": "142a74a167d82a8852fc7af5cc12276c7efe624f311fdd161264bafdf89756ea"
+                  }
+                ],
+                "sha256": "790eaf137a194bd66b7049cb9e8cce6ef912c91bde2fb19ac238b042ff2c1e85"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790343723,
+          "builtAtUnix": 1790383189,
           "buildCache": {
             "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
@@ -565,14 +604,14 @@
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB, safetensors >20 GiB and GGUF shards (native probes in test variants); no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, sparse GGUF/safetensors/shard I/O; test variants also check synthetic Qwen BF16 timestep graph arithmetic on CPU (no GPU inference); no trained-model image generation"
           }
         },
         "test": {
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm32-jspi",
           "variant": "test",
-          "sourceCommit": "d9566c7f8d89fe1e2b71e65aab0e82c523b67a25",
+          "sourceCommit": "473ed681c49fb6790f74087cea42ddf92aad5b1e",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -632,7 +671,7 @@
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "43d5d0f03487a795db534f9fac99bf85daba352ac1dcac9f7485a841d2f38665",
+            "inventorySha256": "b51ef07f9d4cd2f9a120832d69a5b2c8260f7449f935de0ee6ebdc84845a1936",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -731,11 +770,24 @@
                   }
                 ],
                 "sha256": "1aff9d568160b9385703363485da84e4178367403682025b4830986005f76b02"
+              },
+              {
+                "file": "0007-webgpu-qwen-timestep-out-of-place.patch",
+                "target": "stable-diffusion",
+                "reason": "Avoid an in-place Qwen timestep SiLU alias across a BF16 CPU matmul / WebGPU activation boundary. Preserve weights and arithmetic; no profile fallback or dtype conversion.",
+                "files": [
+                  {
+                    "path": "src/model/diffusion/qwen_image.hpp",
+                    "beforeSha256": "f0dde13ce1a7f77f843809a3d2e26d7a0b79d458c9dc80a5dc4bc3d1e72b0018",
+                    "afterSha256": "142a74a167d82a8852fc7af5cc12276c7efe624f311fdd161264bafdf89756ea"
+                  }
+                ],
+                "sha256": "790eaf137a194bd66b7049cb9e8cce6ef912c91bde2fb19ac238b042ff2c1e85"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790343734,
+          "builtAtUnix": 1790383210,
           "buildCache": {
             "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
@@ -744,7 +796,7 @@
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB, safetensors >20 GiB and GGUF shards (native probes in test variants); no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, sparse GGUF/safetensors/shard I/O; test variants also check synthetic Qwen BF16 timestep graph arithmetic on CPU (no GPU inference); no trained-model image generation"
           }
         }
       }
@@ -755,7 +807,7 @@
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm64-jspi",
           "variant": "browser",
-          "sourceCommit": "d9566c7f8d89fe1e2b71e65aab0e82c523b67a25",
+          "sourceCommit": "473ed681c49fb6790f74087cea42ddf92aad5b1e",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -815,7 +867,7 @@
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "43d5d0f03487a795db534f9fac99bf85daba352ac1dcac9f7485a841d2f38665",
+            "inventorySha256": "b51ef07f9d4cd2f9a120832d69a5b2c8260f7449f935de0ee6ebdc84845a1936",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -914,11 +966,24 @@
                   }
                 ],
                 "sha256": "1aff9d568160b9385703363485da84e4178367403682025b4830986005f76b02"
+              },
+              {
+                "file": "0007-webgpu-qwen-timestep-out-of-place.patch",
+                "target": "stable-diffusion",
+                "reason": "Avoid an in-place Qwen timestep SiLU alias across a BF16 CPU matmul / WebGPU activation boundary. Preserve weights and arithmetic; no profile fallback or dtype conversion.",
+                "files": [
+                  {
+                    "path": "src/model/diffusion/qwen_image.hpp",
+                    "beforeSha256": "f0dde13ce1a7f77f843809a3d2e26d7a0b79d458c9dc80a5dc4bc3d1e72b0018",
+                    "afterSha256": "142a74a167d82a8852fc7af5cc12276c7efe624f311fdd161264bafdf89756ea"
+                  }
+                ],
+                "sha256": "790eaf137a194bd66b7049cb9e8cce6ef912c91bde2fb19ac238b042ff2c1e85"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790343735,
+          "builtAtUnix": 1790383209,
           "buildCache": {
             "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
@@ -927,14 +992,14 @@
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB, safetensors >20 GiB and GGUF shards (native probes in test variants); no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, sparse GGUF/safetensors/shard I/O; test variants also check synthetic Qwen BF16 timestep graph arithmetic on CPU (no GPU inference); no trained-model image generation"
           }
         },
         "test": {
           "runtime": "stable-diffusion-cpp",
           "profile": "webgpu-wasm64-jspi",
           "variant": "test",
-          "sourceCommit": "d9566c7f8d89fe1e2b71e65aab0e82c523b67a25",
+          "sourceCommit": "473ed681c49fb6790f74087cea42ddf92aad5b1e",
           "sourceDirty": false,
           "sourceStatusBeforeBuild": [],
           "sourceStatusAfterBuild": [],
@@ -994,7 +1059,7 @@
             "-DEMDAWNWEBGPU_DIR=/home/runner/work/llama-cpp-browser-core/llama-cpp-browser-core/.tools/emdawnwebgpu_pkg"
           ],
           "patches": {
-            "inventorySha256": "43d5d0f03487a795db534f9fac99bf85daba352ac1dcac9f7485a841d2f38665",
+            "inventorySha256": "b51ef07f9d4cd2f9a120832d69a5b2c8260f7449f935de0ee6ebdc84845a1936",
             "patches": [
               {
                 "file": "0001-single-thread-model-reader.patch",
@@ -1093,11 +1158,24 @@
                   }
                 ],
                 "sha256": "1aff9d568160b9385703363485da84e4178367403682025b4830986005f76b02"
+              },
+              {
+                "file": "0007-webgpu-qwen-timestep-out-of-place.patch",
+                "target": "stable-diffusion",
+                "reason": "Avoid an in-place Qwen timestep SiLU alias across a BF16 CPU matmul / WebGPU activation boundary. Preserve weights and arithmetic; no profile fallback or dtype conversion.",
+                "files": [
+                  {
+                    "path": "src/model/diffusion/qwen_image.hpp",
+                    "beforeSha256": "f0dde13ce1a7f77f843809a3d2e26d7a0b79d458c9dc80a5dc4bc3d1e72b0018",
+                    "afterSha256": "142a74a167d82a8852fc7af5cc12276c7efe624f311fdd161264bafdf89756ea"
+                  }
+                ],
+                "sha256": "790eaf137a194bd66b7049cb9e8cce6ef912c91bde2fb19ac238b042ff2c1e85"
               }
             ],
             "vendorCheckoutModified": false
           },
-          "builtAtUnix": 1790343736,
+          "builtAtUnix": 1790383214,
           "buildCache": {
             "identity": "97f1b2486eeb5a55708a04764804c44ec36325bf344f602e1088df5052fa171a",
             "compilerWrapper": "ccache"
@@ -1106,7 +1184,7 @@
             "compiled": true,
             "browserSmoke": true,
             "realModelInference": false,
-            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB, safetensors >20 GiB and GGUF shards (native probes in test variants); no model/GPU inference"
+            "browserSmokeScope": "real-Wasm Worker, public records/callbacks, sparse GGUF/safetensors/shard I/O; test variants also check synthetic Qwen BF16 timestep graph arithmetic on CPU (no GPU inference); no trained-model image generation"
           }
         }
       }
@@ -1121,8 +1199,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 7908,
-      "sha256": "8d9ed6d1ad1879ded87d3fb9169f73a8ea3e5afba4cc1d41079929cecad18329"
+      "bytes": 9671,
+      "sha256": "c89a849dc1ff36abe99629b69ff7929a20fe01f84d7e47181189bb5486994967"
     },
     {
       "path": "api/functions.d.ts",
@@ -1567,7 +1645,7 @@
     {
       "path": "profiles/webgpu-wasm32-asyncify/browser/core.wasm",
       "bytes": 43541718,
-      "sha256": "66a78ffebc179bc53b6b943be76bc54950435a8d6072a2e878f2985b8e29f1de"
+      "sha256": "3dc9b5f9eae74edfd96d1e1d1e461b832a7fb9340439f6382e78f900b2b79e1c"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/test/core.d.ts",
@@ -1576,13 +1654,13 @@
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/test/core.mjs",
-      "bytes": 326634,
-      "sha256": "efb253cb772be56414346950e2c8d30ed0806d30641ca336e8c5dc12bceae635"
+      "bytes": 327002,
+      "sha256": "a0d611ac09af547daad40ad4b122d04fa9463f11bbba04cd007a1354e1efe48a"
     },
     {
       "path": "profiles/webgpu-wasm32-asyncify/test/core.wasm",
-      "bytes": 43781611,
-      "sha256": "6019ed26016c5d8edff1f40e987f122bdbd8185b0e1ec87cdfde239e675d6084"
+      "bytes": 43800548,
+      "sha256": "aa50146f9979527b480abc64d8329a58c62032068dc5a3bd95a02bbeedc4e812"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/browser/core.d.ts",
@@ -1597,7 +1675,7 @@
     {
       "path": "profiles/webgpu-wasm32-jspi/browser/core.wasm",
       "bytes": 37746618,
-      "sha256": "8dda21e104848162b31906674141c1fc0fcb0494b543506c7fa10a619c8f0743"
+      "sha256": "7e7e17bb479b777f94d50d2e4bafe7e15f581591cca08e8b752c09686cd095e8"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/test/core.d.ts",
@@ -1606,13 +1684,13 @@
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/test/core.mjs",
-      "bytes": 210622,
-      "sha256": "dc5a7c0fcd51dd909790fd7c71f17c75509e2907abccda872373b893b87a0e61"
+      "bytes": 211013,
+      "sha256": "72768fe4fdb06163084193f00e926e7c6dc851d6a902419c7b89c14d4f0a49f5"
     },
     {
       "path": "profiles/webgpu-wasm32-jspi/test/core.wasm",
-      "bytes": 37927582,
-      "sha256": "7fa06736a587ca17f70b6d9bcc8a76e08e8add874a363823517a3134e9bbaef6"
+      "bytes": 37934528,
+      "sha256": "3e45605ee2f3661867ffdec4cb4b8a5357b7337ac53021e42ae885e3bd883173"
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/browser/core.d.ts",
@@ -1627,7 +1705,7 @@
     {
       "path": "profiles/webgpu-wasm64-jspi/browser/core.wasm",
       "bytes": 38060550,
-      "sha256": "a077c3e7edc469d590ab611ddeb4f8b2a3ff975b4d90092ab36a912ee2c72c86"
+      "sha256": "6f8683c50058e09b6cafaaa62ec86c3c955c08d01b77f57d7e5f3b81c24cbd6a"
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/test/core.d.ts",
@@ -1636,13 +1714,13 @@
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/test/core.mjs",
-      "bytes": 214120,
-      "sha256": "dee0eb7bda7472884e2c60245af0955ec91af719a3f0d6db51d3e8c978db9ea2"
+      "bytes": 214511,
+      "sha256": "44cdf80ecccfbc1fba7ba6ebe02a27f1267519021bb5db646cf58c8c29185116"
     },
     {
       "path": "profiles/webgpu-wasm64-jspi/test/core.wasm",
-      "bytes": 38251497,
-      "sha256": "fc3ecb2c37f9c94fde76e486e00ee7cf92c90cb5a836174f2fda208d31b912d3"
+      "bytes": 38258456,
+      "sha256": "ae69c3621e74e3a7bb545475aa2db8090e40f0a22d93847787f070bac4637a34"
     }
   ]
 }
