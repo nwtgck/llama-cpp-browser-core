@@ -1,0 +1,17 @@
+diff --git a/src/model/diffusion/qwen_image.hpp b/src/model/diffusion/qwen_image.hpp
+--- a/src/model/diffusion/qwen_image.hpp
++++ b/src/model/diffusion/qwen_image.hpp
+@@ -88,5 +88,13 @@
+             sample = linear_1->forward(ctx, sample);
++#ifdef SD_BROWSER_WEBGPU
++            // BF16 linear_1 can execute on CPU while SiLU executes on WebGPU.
++            // An in-place result retains the CPU view_src even when the scheduler
++            // replaces src[0] with a GPU copy. Give this pure activation its own
++            // result so allocation follows the selected execution backend.
++            sample = ggml_silu(ctx->ggml_ctx, sample);
++#else
+             sample = ggml_silu_inplace(ctx->ggml_ctx, sample);
++#endif
+             sample = linear_2->forward(ctx, sample);
+             return sample;
+         }

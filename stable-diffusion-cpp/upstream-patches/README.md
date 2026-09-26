@@ -31,6 +31,18 @@ llama.cpp checkout is used only as a source for its `ggml/` subtree.
    or rewriting the original files. Duplicate/missing tensors and inconsistent
    shard metadata fail closed. This patch does not add application model recipes.
 
+7. Qwen timestep activation: use out-of-place SiLU under `SD_BROWSER_WEBGPU`.
+   Qwen Image 2.1's BF16 first linear may run on CPU while the runner pins its
+   supported SiLU to WebGPU. An in-place output retains a CPU `view_src` despite
+   the scheduler copying `src[0]` to WebGPU; binding that output as a WebGPU buffer
+   traps before shader execution. Keep the original activation formula, weight
+   types and backend selection; only the result allocation changes. Other builds
+   retain the upstream in-place path. See `tests/qwen-timestep-probe.cpp` for the
+   actual Qwen block's alias/placement/numerical regression. Remove this patch
+   only after a reviewed upstream equivalent makes the mixed-BF16 placement and
+   numerical regression pass. If the upstream scheduler safely relocates views,
+   adapt the probe's pre-allocation no-view assertion as part of that review.
+
 The smoke fixture reports byte ranges and total bytes rather than guessing from
 read-call counts. Its 4 KiB chunk / 256 KiB total budget applies only to the tiny
 synthetic fixture; it is not a metadata or model size limit in the core. Runtime
@@ -38,7 +50,7 @@ input size and source chunking remain caller-owned.
 
 Real GPU numerical parity, large dispatches, all architectures and quantizations
 are not certified. There is no application resolution cap, sampler selection,
-GPU budget or Qwen-specific policy in these patches or the bridge.
+GPU budget or Qwen-specific sampling policy in these patches or the bridge.
 
 Removal criteria: replace each patch with an upstream equivalent when its same
 threading/normalization/memory/large-file tests pass. Never silently skip a failed

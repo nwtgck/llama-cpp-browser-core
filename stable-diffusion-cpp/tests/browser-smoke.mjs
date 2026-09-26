@@ -1,4 +1,6 @@
-// Real Wasm/Worker/filesystem/callback boundary tests. No model or GPU inference.
+// Real Wasm/Worker/filesystem/callback tests plus a tiny synthetic CPU Qwen
+// timestep graph. Optional SDCB_TEST_WEBGPU=1 also checks real WebGPU arithmetic;
+// neither mode is a trained-model image-generation/quality test.
 import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -6,6 +8,7 @@ import { makeFixture } from './gguf-fixture.mjs';
 import { makeModelIoFixtures } from './model-io-fixtures.mjs';
 import { pathToFileURL } from 'node:url';
 const root = path.resolve(process.argv[2] ?? 'dist/package');
+const testWebGpu = process.env.SDCB_TEST_WEBGPU === '1';
 const { chromium } = await import(pathToFileURL(path.resolve('../.tools/browser/node_modules/playwright/index.mjs')).href);
 const server = createServer(async (req, res) => {
   try {
@@ -28,8 +31,8 @@ try {
   for (const profile of Object.keys(profiles)) {
     for (const variant of ['browser', 'test']) {
       try {
-        const result = await page.evaluate(async ({ profile, variant, fixtureSource, modelIoSource }) => {
-          const run = async ({ origin, base, variant, profile }) => {
+        const result = await page.evaluate(async ({ profile, variant, fixtureSource, modelIoSource, testWebGpu }) => {
+          const run = async ({ origin, base, variant, profile, testWebGpu }) => {
             const { attachCore, schema, mountReadOnlyFile } = await import(origin + '/examples/runtime/index.mjs');
             const create = (await import(base + 'core.mjs')).default;
             const response = await fetch(base + 'core.wasm');
@@ -98,7 +101,7 @@ try {
               if (variant === 'test') {
                 module._sdc_test_callbacks();
                 if (!logs.at(-1)[1].includes('native callback probe') || logs.at(-1)[2] !== 17 || JSON.stringify(progress) !== '[[1,4,0.125,19]]') throw Error('Native callback ABI mismatch');
-              } else if (module._sdc_test_callbacks !== undefined || module._sdc_test_gguf_offset !== undefined) throw Error('Test probe leaked');
+              } else if (module._sdc_test_callbacks !== undefined || module._sdc_test_gguf_offset !== undefined || module._sdc_test_qwen_timestep !== undefined) throw Error('Test probe leaked');
               await core.api.sd_set_log_callback(0n, 0n);
               await core.api.sd_set_progress_callback(0n, 0n);
               const count = logs.length + progress.length;
@@ -109,7 +112,23 @@ try {
               await core.api.sd_set_progress_callback(0n, 0n);
               module.removeFunction(log); module.removeFunction(update);
             }
-            return { passed: true, reads, modelIoReads, scope: 'real-Wasm Worker, public records/callbacks, virtual unsplit GGUF >8 GiB, safetensors >20 GiB and GGUF shards (native probes in test variants); no model/GPU inference' };
+            const timestep = [];
+            if (variant === 'test') {
+              for (const name of testWebGpu ? ['CPU', 'WebGPU'] : ['CPU']) {
+                const pointer = core.utf8(name);
+                try {
+                  // Unlike the file probes, a WebGPU compute/readback can suspend.
+                  const code = await module.ccall('sdc_test_qwen_timestep', 'number',
+                    [core.pointerBytes === 8 ? 'bigint' : 'number'],
+                    [core.pointerBytes === 8 ? pointer : Number(pointer)], { async: true });
+                  if (code !== 1) throw Error(`Synthetic Qwen timestep ${name} failed: ${code}`);
+                  timestep.push({ backend: name, passed: true });
+                } finally { core.free(pointer); }
+              }
+            }
+            return { passed: true, reads, modelIoReads, timestep,
+              scope: 'real-Wasm Worker, public records/callbacks, sparse GGUF/safetensors/shard I/O; test variants also check synthetic Qwen BF16 timestep graph arithmetic on ' +
+                (testWebGpu ? 'CPU and WebGPU' : 'CPU (no GPU inference)') + '; no trained-model image generation' };
           };
           const source = `const makeFixture = ${fixtureSource}; const makeModelIoFixtures = ${modelIoSource}; const run = ${run.toString()}; onmessage = async ({ data }) => { try { postMessage({ result: await run(data) }); } catch (error) { postMessage({ error: String(error.stack || error) }); } };`;
           const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
@@ -120,12 +139,12 @@ try {
               timer = setTimeout(() => reject(Error(`Worker smoke timed out: ${profile}/${variant}`)), 120000);
               worker.onerror = event => reject(Error(event.message));
               worker.onmessage = ({ data }) => data.error ? reject(Error(data.error)) : resolve({ profile, variant, ...data.result });
-              worker.postMessage({ origin: location.origin, base: `${location.origin}/profiles/${profile}/${variant}/`, variant, profile });
+              worker.postMessage({ origin: location.origin, base: `${location.origin}/profiles/${profile}/${variant}/`, variant, profile, testWebGpu });
             });
           } finally {
             clearTimeout(timer); worker.terminate(); URL.revokeObjectURL(url);
           }
-        }, { profile, variant, fixtureSource: makeFixture.toString(), modelIoSource: makeModelIoFixtures.toString() });
+        }, { profile, variant, fixtureSource: makeFixture.toString(), modelIoSource: makeModelIoFixtures.toString(), testWebGpu });
         console.log(JSON.stringify(result, null, 2));
         const file = path.resolve('build', profile, variant, 'provenance.json');
         const provenance = JSON.parse(await readFile(file, 'utf8'));
