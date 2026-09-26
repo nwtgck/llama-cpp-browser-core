@@ -16,7 +16,7 @@ class BrowserLinkContract(unittest.TestCase):
         root = Path(temp.name)
         (root/'bridge').mkdir(); (root/'config').mkdir()
         (root/'scripts').mkdir(); (root/'tests').mkdir()
-        for path in ('config/variants.json','bridge/core.d.ts','scripts/generate_bindings.py','tests/wasm-probes.cpp'):
+        for path in ('config/variants.json','bridge/core.d.ts','scripts/generate_bindings.py','tests/wasm-probes.cpp','tests/qwen-timestep-probe.cpp'):
             shutil.copy2(ROOT/path,root/path)
         (root/'bridge/browser.cpp').write_text('// Fixture, never compiled\n')
         (root/'CMakeLists.txt').write_text((ROOT/'CMakeLists.txt').read_text()+'''
@@ -56,6 +56,7 @@ set_property(TARGET ggml-webgpu PROPERTY INTERFACE_LINK_OPTIONS "-exceptions")
                 self.assertNotIn('--pre-js',data['link-options'])
                 self.assertIn('exports.json',data['link-inputs'])
                 self.assertNotIn('_sdc_test_callbacks', json.loads((root/'out/generated/exports.json').read_text()))
+                self.assertNotIn('_sdc_test_qwen_timestep', json.loads((root/'out/generated/exports.json').read_text()))
                 self.assertIn('-sJSPI=1' if jspi else '-sASYNCIFY=1',data['link-options'])
                 incoming=next(part for part in data['link-options'].split(';') if part.startswith('-sINCOMING_MODULE_JS_API'))
                 self.assertNotIn('onProgress',incoming);self.assertNotIn('onLog',incoming)
@@ -74,15 +75,19 @@ set_property(TARGET ggml-webgpu PROPERTY INTERFACE_LINK_OPTIONS "-exceptions")
             self.configure('browser', False, memory64=True)
         self.assertIn('memory64 profile requires JSPI', failure.exception.stderr)
 
-    def test_test_variants_expose_only_the_explicit_synthetic_callback_hook(self):
+    def test_test_variants_expose_explicit_synthetic_probes_and_suspending_timestep(self):
         for jspi in (True,False):
             with self.subTest(jspi=jspi):
                 root,data = self.configure('test',jspi)
                 self.assertIn('SD_BROWSER_WEBGPU=1',data['defines'])
+                self.assertIn('GGML_MAX_NAME=160',data['defines'])
+                self.assertIn('SD_USE_UPSTREAM_GGML',data['defines'])
                 exports=next(part for part in data['link-options'].split(';') if part.startswith('-sEXPORTED_FUNCTIONS'))
                 entries=json.loads((root/'out/generated/exports.json').read_text())
                 self.assertEqual(entries.count('_sdc_test_callbacks'),1)
                 self.assertIn('_sdc_test_gguf_offset',entries)
+                self.assertIn('_sdc_test_qwen_timestep', entries)
+                self.assertIn('sdc_test_qwen_timestep', json.loads((root/'out/generated/jspi-exports.json').read_text()))
                 self.assertNotIn('_sdb_load',entries)
                 self.assertIn('-sASSERTIONS=1',data['link-options'])
 

@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <vector>
 extern "C" uint32_t sdc_abi_version();
+extern "C" int sdc_test_qwen_timestep(const char*);
 extern "C" uint32_t sdc_model_io_capabilities();
 extern "C" uint64_t sdc_test_safetensors_offset(const char*);
 extern "C" uint32_t sdc_test_safetensors_value(const char*);
@@ -110,6 +111,7 @@ static void model_io_checks() {
 int main() {
     try {
         check(sdc_abi_version()==2,"ABI version");
+        check(sdc_test_qwen_timestep("CPU")==1,"Qwen BF16 timestep activation placement and numerical parity");
         model_io_checks();
         sd_ctx_params_t context{};sdc_sd_ctx_params_init(uint64_t(uintptr_t(&context)));
         sd_ctx_params_t reference{};sd_ctx_params_init(&reference);

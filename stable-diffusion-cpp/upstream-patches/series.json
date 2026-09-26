@@ -92,6 +92,18 @@
           "afterSha256": "cc28beef610c2b9e7804e659514515397a7e724c31fcfea52bd6baee5517279a"
         }
       ]
+    },
+    {
+      "file": "0007-webgpu-qwen-timestep-out-of-place.patch",
+      "target": "stable-diffusion",
+      "reason": "Avoid an in-place Qwen timestep SiLU alias across a BF16 CPU matmul / WebGPU activation boundary. Preserve weights and arithmetic; no profile fallback or dtype conversion.",
+      "files": [
+        {
+          "path": "src/model/diffusion/qwen_image.hpp",
+          "beforeSha256": "f0dde13ce1a7f77f843809a3d2e26d7a0b79d458c9dc80a5dc4bc3d1e72b0018",
+          "afterSha256": "142a74a167d82a8852fc7af5cc12276c7efe624f311fdd161264bafdf89756ea"
+        }
+      ]
     }
   ]
 }
