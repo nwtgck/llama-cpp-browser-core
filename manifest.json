@@ -1,6 +1,6 @@
 {
   "formatVersion": 3,
-  "sourceCommit": "473ed681c49fb6790f74087cea42ddf92aad5b1e",
+  "sourceCommit": "415fc9824aa2d1f345b0e018113a11eb42518e36",
   "runtimes": {
     "llama-cpp": {
       "manifest": "llama-cpp/manifest.json",
@@ -480,7 +480,7 @@
     {
       "path": "llama-cpp/manifest.json",
       "bytes": 53063,
-      "sha256": "178f7659ff8029282573b2998e9bbd7dc694dd167442b30cbcd6ff63e556fb6b"
+      "sha256": "7c195fc66217f35ff1f36cc38ca1cec4480d8f19f86b270c07bf8477b3551a39"
     },
     {
       "path": "llama-cpp/package.json",
@@ -1080,7 +1080,7 @@
     {
       "path": "stable-diffusion-cpp/manifest.json",
       "bytes": 83195,
-      "sha256": "0f15038edb87b3a272c29d82546f5baadbfc9759cd433bcdb049a3e91ac8833c"
+      "sha256": "fa36f49bd384ce6ba03a91ac9156c51de20a20cd6b1658c6280e67a3288b670a"
     },
     {
       "path": "stable-diffusion-cpp/package.json",
@@ -1100,7 +1100,7 @@
     {
       "path": "stable-diffusion-cpp/profiles/webgpu-wasm32-asyncify/browser/core.wasm",
       "bytes": 43541718,
-      "sha256": "3dc9b5f9eae74edfd96d1e1d1e461b832a7fb9340439f6382e78f900b2b79e1c"
+      "sha256": "d0e058bc8a9db88af77bc1c2a05da4603bab4960c71c468f40f8766f08bed281"
     },
     {
       "path": "stable-diffusion-cpp/profiles/webgpu-wasm32-asyncify/test/core.d.ts",
@@ -1115,7 +1115,7 @@
     {
       "path": "stable-diffusion-cpp/profiles/webgpu-wasm32-asyncify/test/core.wasm",
       "bytes": 43800548,
-      "sha256": "aa50146f9979527b480abc64d8329a58c62032068dc5a3bd95a02bbeedc4e812"
+      "sha256": "8b4d44ad459d6b3e5181d9e2b4d27043f6a9f7f8e258be95cb97febb496fbd1a"
     },
     {
       "path": "stable-diffusion-cpp/profiles/webgpu-wasm32-jspi/browser/core.d.ts",
@@ -1130,7 +1130,7 @@
     {
       "path": "stable-diffusion-cpp/profiles/webgpu-wasm32-jspi/browser/core.wasm",
       "bytes": 37746618,
-      "sha256": "7e7e17bb479b777f94d50d2e4bafe7e15f581591cca08e8b752c09686cd095e8"
+      "sha256": "c8340d9f496dbaf4869da9009758fbdb21a06ce4be8c36e384a903e960686b6f"
     },
     {
       "path": "stable-diffusion-cpp/profiles/webgpu-wasm32-jspi/test/core.d.ts",
@@ -1145,7 +1145,7 @@
     {
       "path": "stable-diffusion-cpp/profiles/webgpu-wasm32-jspi/test/core.wasm",
       "bytes": 37934528,
-      "sha256": "3e45605ee2f3661867ffdec4cb4b8a5357b7337ac53021e42ae885e3bd883173"
+      "sha256": "41de95067f70db1164a18f6894624c67851e7e05cfc7724b1a305557dfe0365d"
     },
     {
       "path": "stable-diffusion-cpp/profiles/webgpu-wasm64-jspi/browser/core.d.ts",
@@ -1160,7 +1160,7 @@
     {
       "path": "stable-diffusion-cpp/profiles/webgpu-wasm64-jspi/browser/core.wasm",
       "bytes": 38060550,
-      "sha256": "6f8683c50058e09b6cafaaa62ec86c3c955c08d01b77f57d7e5f3b81c24cbd6a"
+      "sha256": "edf305bc6e811fcfbff2c9f2934a8f8553aca92dba0cb41fde0fa552d67d76e3"
     },
     {
       "path": "stable-diffusion-cpp/profiles/webgpu-wasm64-jspi/test/core.d.ts",
@@ -1175,7 +1175,7 @@
     {
       "path": "stable-diffusion-cpp/profiles/webgpu-wasm64-jspi/test/core.wasm",
       "bytes": 38258456,
-      "sha256": "ae69c3621e74e3a7bb545475aa2db8090e40f0a22d93847787f070bac4637a34"
+      "sha256": "4485491bdf23bf329dd9bf0d5ca24da9a183cd8d3b552ce45782d9d0ce8a7163"
     }
   ]
 }
