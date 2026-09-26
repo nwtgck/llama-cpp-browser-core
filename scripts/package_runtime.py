@@ -26,10 +26,15 @@ def identity(path: Path) -> dict:
     with path.open('rb') as stream: digest = hashlib.file_digest(stream, 'sha256').hexdigest()
     return {'bytes': path.stat().st_size, 'sha256': digest}
 
-def validate(directory: Path, require_clean: bool = True) -> dict:
+def validate(directory: Path, require_clean: bool = True, *, check_npm_pack: bool = True) -> dict:
+    """Check the complete tree; only npm compression can be explicitly deferred."""
     directory = directory.resolve()
+    entries = list(directory.rglob('*'))
+    if any(p.is_symlink() or not (p.is_file() or p.is_dir()) for p in entries):
+        raise ValueError('Linked or non-regular entry in runtime package')
     package = json.loads((directory / 'package.json').read_text())
-    if package['name'] != RUNTIME_NAME or any(k in package for k in ('scripts', 'dependencies', 'devDependencies', 'optionalDependencies', 'workspaces')):
+    if package['name'] != RUNTIME_NAME or any(k in package for k in ('scripts', 'dependencies', 'devDependencies', 'optionalDependencies', 'workspaces',
+            'peerDependencies', 'peerDependenciesMeta', 'bundleDependencies', 'bundledDependencies')):
         raise ValueError('Runtime package must have no install/build hooks or dependencies')
     manifest = json.loads((directory / 'manifest.json').read_text())
     if manifest['formatVersion'] != 3 or set(manifest['runtimes']) != set(RUNTIMES):
@@ -37,7 +42,7 @@ def validate(directory: Path, require_clean: bool = True) -> dict:
     if not isinstance(manifest['sourceCommit'], str) or not re.fullmatch(r'[0-9a-f]{40}', manifest['sourceCommit']):
         raise ValueError('Invalid source identity')
     files = manifest['files']; expected = {entry['path'] for entry in files}
-    actual = {p.relative_to(directory).as_posix() for p in directory.rglob('*') if p.is_file()}
+    actual = {p.relative_to(directory).as_posix() for p in entries if p.is_file()}
     if len(files) != len(expected) or actual != expected | {'manifest.json'}:
         raise ValueError('Manifest does not exactly cover the complete package tree')
     for entry in files:
@@ -49,21 +54,24 @@ def validate(directory: Path, require_clean: bool = True) -> dict:
             raise ValueError('Artifact hash/size mismatch: ' + entry['path'])
         if entry['bytes'] >= 100 * 1024**2: raise ValueError('Single-file artifact size limit exceeded')
     for runtime in RUNTIMES:
-        runtime_module(runtime).validate(directory / runtime, require_clean=require_clean)
+        runtime_module(runtime).validate(directory / runtime, require_clean=require_clean, check_npm_pack=check_npm_pack)
         inner = json.loads((directory / runtime / 'manifest.json').read_text())
         if inner['sourceCommit'] != manifest['sourceCommit']: raise ValueError('Mixed source commits')
         if manifest['runtimes'][runtime] != {'manifest': runtime + '/manifest.json', 'manifestFormatVersion': inner['formatVersion']}:
             raise ValueError('Wrong runtime manifest binding')
-    packed = json.loads(subprocess.check_output(['npm', 'pack', '--dry-run', '--json'], cwd=directory, text=True))
-    if {f['path'] for f in packed[0]['files']} != actual: raise ValueError('npm pack tree mismatch')
+    if check_npm_pack:
+        packed = json.loads(subprocess.check_output(['npm', 'pack', '--dry-run', '--json'], cwd=directory, text=True))
+        if {f['path'] for f in packed[0]['files']} != actual: raise ValueError('npm pack tree mismatch')
     return manifest
 
-def assemble(inputs: Path, destination: Path) -> None:
+def assemble(inputs: Path, destination: Path, *, check_npm_pack: bool = True) -> None:
+    # CI defers npm packing until publication, not any integrity checks. Keep
+    # full validation as the default for callers that only assemble a package.
     source = None; runtimes = {}
     with tempfile.TemporaryDirectory(prefix='lcore-package-') as temporary:
         out = Path(temporary)
         for runtime in RUNTIMES:
-            runtime_module(runtime).validate(inputs / runtime)
+            runtime_module(runtime).validate(inputs / runtime, check_npm_pack=check_npm_pack)
             manifest = json.loads((inputs / runtime / 'manifest.json').read_text())
             if source is not None and source != manifest['sourceCommit']: raise ValueError('Cannot mix source revisions')
             source = manifest['sourceCommit']
@@ -83,16 +91,20 @@ def assemble(inputs: Path, destination: Path) -> None:
         manifest = {'formatVersion': 3, 'sourceCommit': source, 'runtimes': runtimes,
                     'files': [{'path': p.relative_to(out).as_posix(), **identity(p)} for p in sorted(out.rglob('*')) if p.is_file()]}
         (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-        validate(out)
+        validate(out, check_npm_pack=check_npm_pack)
         if destination.exists(): shutil.rmtree(destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(out, destination)
 
-if __name__ == '__main__':
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--inputs', type=Path, default=ROOT / 'build/package-inputs')
     parser.add_argument('--output', type=Path, default=ROOT / 'dist/package')
     parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--defer-npm-pack', action='store_true',
+                        help='Validate payloads now; require publish_artifacts.py to check npm packing before publication')
     args = parser.parse_args()
-    if not args.verify_only: assemble(args.inputs, args.output)
-    print(json.dumps({'sourceCommit': validate(args.output)['sourceCommit']}))
+    if not args.verify_only: assemble(args.inputs, args.output, check_npm_pack=not args.defer_npm_pack)
+    print(json.dumps({'sourceCommit': validate(args.output, check_npm_pack=not args.defer_npm_pack)['sourceCommit']}))
+
+if __name__ == '__main__': main()

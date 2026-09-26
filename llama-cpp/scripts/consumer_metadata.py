@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -133,10 +134,14 @@ def consumer_knowledge() -> dict:
     }
 
 
-def metadata(package: Path, repository: str, commit: str, lock: dict, divergences: dict) -> dict:
+def metadata(package: Path, repository: str, commit: str, lock: dict, divergences: dict, *,
+             manifest_bytes: bytes | None = None) -> dict:
     repository_name(repository)
     full_sha(commit)
-    manifest = json.loads((package / 'manifest.json').read_text())
+    # The multi-runtime caller supplies bytes already bound to its root manifest.
+    # Standalone callers still read locally, once, and report that same snapshot.
+    if manifest_bytes is None: manifest_bytes = (package / 'manifest.json').read_bytes()
+    manifest = json.loads(manifest_bytes)
     source = full_sha(manifest['sourceCommit'])
     upstream = full_sha(manifest['llamaCommit'])
     if divergences['baseCommit'] != upstream:
@@ -163,7 +168,8 @@ def metadata(package: Path, repository: str, commit: str, lock: dict, divergence
             'sourceRawBase': f'https://raw.githubusercontent.com/{repository}/{source}/',
             'sourceRepositoryRawBase': f'https://raw.githubusercontent.com/{repository}/{source}/',
             'upstreamRawBase': f'https://raw.githubusercontent.com/ggml-org/llama.cpp/{upstream}/',
-            'manifest': {'path': 'manifest.json', **file_identity(package / 'manifest.json')},
+            'manifest': {'path': 'manifest.json', 'bytes': len(manifest_bytes),
+                         'sha256': hashlib.sha256(manifest_bytes).hexdigest()},
             'identity': 'Exact extracted file bytes: manifest digest above, then manifest path/bytes/SHA-256 entries. Archive compression bytes are not the identity; rendered web text is not a byte-exact download.',
             'packageScope': 'The complete artifact tree includes both variants, types, APIs, examples and license notices. A few retrieved core files are sufficient for partial review, not a complete installed package.',
             'sourceArchiveScope': 'Source archives do not include submodule contents; the upstream commit is separate.',

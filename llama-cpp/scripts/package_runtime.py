@@ -51,10 +51,16 @@ def copy_license_notices(source: Path, destination: Path):
 def sha(path):
     with path.open('rb') as f: return hashlib.file_digest(f,'sha256').hexdigest()
 
-def validate(directory: Path, require_clean=True):
+def validate(directory: Path, require_clean=True, *, check_npm_pack: bool = True):
+    # Assembly may defer compression to the publisher. Every payload and
+    # provenance check still runs; standalone validation includes npm pack.
     directory=directory.resolve()
+    entries=list(directory.rglob('*'))
+    if any(p.is_symlink() or not (p.is_file() or p.is_dir()) for p in entries):
+        raise ValueError('Linked or non-regular entry in runtime package')
     package=json.loads((directory/'package.json').read_text())
-    for key in ('scripts','workspaces','devDependencies','dependencies','optionalDependencies'):
+    for key in ('scripts','workspaces','devDependencies','dependencies','optionalDependencies',
+                'peerDependencies','peerDependenciesMeta','bundleDependencies','bundledDependencies'):
         if key in package: raise ValueError(f'Unexpected install-time input: {key}')
     if package['name']!=RUNTIME_NAME: raise ValueError('Wrong package name')
     manifest=json.loads((directory/'manifest.json').read_text())
@@ -65,7 +71,7 @@ def validate(directory: Path, require_clean=True):
         raise ValueError('Missing embedded third-party license notices')
     if not {'examples/runtime/'+path for path in EXAMPLE_RUNTIME_FILES}.issubset(expected):
         raise ValueError('Missing example runtime files')
-    actual={p.relative_to(directory).as_posix() for p in directory.rglob('*') if p.is_file()}
+    actual={p.relative_to(directory).as_posix() for p in entries if p.is_file()}
     if actual != set(expected)|{'manifest.json'}: raise ValueError('Manifest does not exactly cover the package tree')
     if (directory/'.gitmodules').exists() or (directory/'binding.gyp').exists(): raise ValueError('Source/build input in runtime')
     if not manifest['profiles']: raise ValueError('No profiles')
@@ -90,11 +96,13 @@ def validate(directory: Path, require_clean=True):
             for ext in ('mjs','wasm','d.ts'):
                 if f'profiles/{name}/{variant}/core.{ext}' not in expected:
                     raise ValueError(f'Missing {name}/{variant} runtime')
-            if (directory/f'profiles/{name}/{variant}/core.wasm').read_bytes()[:8] != b'\x00asm\x01\x00\x00\x00':
-                raise ValueError('Not a WebAssembly module')
-    packed=json.loads(subprocess.check_output(['npm','pack','--dry-run','--json'],cwd=directory,text=True))
-    pack_paths={x['path'] for x in packed[0]['files']}
-    if pack_paths != actual: raise ValueError(f'npm pack file mismatch: {sorted(actual ^ pack_paths)}')
+            with (directory/f'profiles/{name}/{variant}/core.wasm').open('rb') as wasm:
+                if wasm.read(8) != b'\x00asm\x01\x00\x00\x00':
+                    raise ValueError('Not a WebAssembly module')
+    if check_npm_pack:
+        packed=json.loads(subprocess.check_output(['npm','pack','--dry-run','--json'],cwd=directory,text=True))
+        pack_paths={x['path'] for x in packed[0]['files']}
+        if pack_paths != actual: raise ValueError(f'npm pack file mismatch: {sorted(actual ^ pack_paths)}')
     return {'files':len(actual),'bytes':sum(p.stat().st_size for p in directory.rglob('*') if p.is_file()),
             'profiles':list(manifest['profiles'])}
 

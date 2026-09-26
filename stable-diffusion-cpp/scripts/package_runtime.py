@@ -20,16 +20,21 @@ CAPABILITIES = {'ggufFileOffsetBits': 64, 'callerOwnedRandomAccess': True, 'upst
 def sha(path: Path) -> str:
     with path.open('rb') as stream: return hashlib.file_digest(stream, 'sha256').hexdigest()
 
-def validate(directory: Path, require_clean: bool = True) -> dict:
+def validate(directory: Path, require_clean: bool = True, *, check_npm_pack: bool = True) -> dict:
+    # This switch defers only compression, never the payload/provenance checks.
+    entries = list(directory.rglob('*'))
+    if any(p.is_symlink() or not (p.is_file() or p.is_dir()) for p in entries):
+        raise ValueError('Linked or non-regular entry in runtime package')
     package = json.loads((directory / 'package.json').read_text())
-    if package['name'] != NAME or any(k in package for k in ('scripts', 'dependencies', 'devDependencies', 'optionalDependencies', 'workspaces')):
+    if package['name'] != NAME or any(k in package for k in ('scripts', 'dependencies', 'devDependencies', 'optionalDependencies', 'workspaces',
+            'peerDependencies', 'peerDependenciesMeta', 'bundleDependencies', 'bundledDependencies')):
         raise ValueError('Not a runtime-only image package')
     manifest = json.loads((directory / 'manifest.json').read_text())
     if manifest['formatVersion'] != 2 or manifest['abiVersion'] != 2 or manifest['runtime'] != 'stable-diffusion-cpp':
         raise ValueError('Unknown image runtime format')
     files = manifest['files']
     expected = {entry['path'] for entry in files}
-    actual = {p.relative_to(directory).as_posix() for p in directory.rglob('*') if p.is_file()}
+    actual = {p.relative_to(directory).as_posix() for p in entries if p.is_file()}
     if len(expected) != len(files) or actual != expected | {'manifest.json'}:
         raise ValueError('Manifest must exactly cover the payload')
     for entry in files:
@@ -65,16 +70,18 @@ def validate(directory: Path, require_clean: bool = True) -> dict:
             if not data.get('patches', {}).get('patches'): raise ValueError('Missing upstream patch provenance')
             for ext in ('mjs', 'wasm', 'd.ts'):
                 if f'profiles/{profile}/{variant}/core.{ext}' not in expected: raise ValueError('Missing image runtime')
-            if (directory / f'profiles/{profile}/{variant}/core.wasm').read_bytes()[:8] != b'\0asm\1\0\0\0':
-                raise ValueError('Not WebAssembly')
+            with (directory / f'profiles/{profile}/{variant}/core.wasm').open('rb') as wasm:
+                if wasm.read(8) != b'\0asm\1\0\0\0':
+                    raise ValueError('Not WebAssembly')
     for required in ('LICENSE', 'licenses/stable-diffusion/LICENSE', 'licenses/embedded/json.hpp.txt', 'licenses/embedded/stb_image.h.txt', 'licenses/embedded/stb_image_resize.h.txt', 'licenses/embedded/stb_image_write.h.txt'):
         if required not in expected: raise ValueError('Missing required image license: ' + required)
     if 'licenses/ggml/LICENSE' not in expected: raise ValueError('Missing ggml repository license')
     for name in ('emscripten', 'emdawnwebgpu_pkg'):
         if not any(path.startswith(f'licenses/toolchain/{name}/') for path in expected):
             raise ValueError('Missing image toolchain notices: ' + name)
-    packed = json.loads(subprocess.check_output(['npm', 'pack', '--dry-run', '--json'], cwd=directory, text=True))
-    if {entry['path'] for entry in packed[0]['files']} != actual: raise ValueError('npm package tree differs')
+    if check_npm_pack:
+        packed = json.loads(subprocess.check_output(['npm', 'pack', '--dry-run', '--json'], cwd=directory, text=True))
+        if {entry['path'] for entry in packed[0]['files']} != actual: raise ValueError('npm package tree differs')
     return manifest
 
 def package(build_root: Path, destination: Path, license_roots: list[Path]) -> None:

@@ -372,8 +372,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.LCB_SOURCE_COMMIT }}
-          submodules: recursive
+          # Only the llama source overlay is read by consumer provenance.
+          submodules: false
           persist-credentials: false
+      - name: Check out the upstream needed for consumer provenance
+        run: git submodule update --init --checkout --depth=1 -- llama-cpp/vendor/llama.cpp
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
@@ -386,7 +389,9 @@ jobs:
           name: image-runtime-package
           path: build/package-inputs/stable-diffusion-cpp/
       - name: Assemble both source-bound runtimes
-        run: python3 scripts/package_runtime.py
+        # All payload/provenance checks still run. The publisher checks actual
+        # npm pack output for both runtimes and the root before any push.
+        run: python3 scripts/package_runtime.py --defer-npm-pack
       - name: Verify package source before publication
         run: |
           python3 - <<'PYVERIFY'
@@ -404,7 +409,10 @@ jobs:
       - name: Generate npm lock and consumer integration metadata
         env:
           ARTIFACT_COMMIT: ${{ steps.publish.outputs.commit }}
-        run: python3 scripts/consumer_metadata.py --package dist/package --commit "$ARTIFACT_COMMIT"
+          PUBLISHED_MANIFEST_SHA256: ${{ steps.publish.outputs.manifest-sha256 }}
+        run: >-
+          python3 scripts/consumer_metadata.py --package dist/package --commit "$ARTIFACT_COMMIT"
+          --published-manifest-sha256 "$PUBLISHED_MANIFEST_SHA256"
       - uses: actions/upload-artifact@v4
         with:
           name: consumer-update-${{ github.run_attempt }}
